@@ -1,70 +1,250 @@
 ﻿
+Exercise: 61 (Serge I: 2003-02-14)
+For the database with money transactions being recorded not more than once a day, calculate the total cash balance of all buy-back centers.
+(Посчитать остаток денежных средств на всех пунктах приема для базы данных с отчетностью не чаще одного раза в день.)
 
-()
-
-
-
-===============================================================================================================================================
-
-
-()
-
-
-
-===============================================================================================================================================
-
-
-()
-
-
+SELECT SUM(COALESCE(incm.inc, 0) - COALESCE(outc.out, 0))
+FROM (
+	SELECT SUM(inc) inc
+	FROM Income_o
+) incm,
+(
+	SELECT SUM(out) out
+	FROM Outcome_o
+) outc
 
 ===============================================================================================================================================
 
+Exercise: 62 (Serge I: 2003-02-15)
+For the database with money transactions being recorded not more than once a day, calculate the total cash balance of all buy-back centers at the beginning of 04/15/2001.
+(Посчитать остаток денежных средств на всех пунктах приема на начало дня 15/04/01 для базы данных с отчетностью не чаще одного раза в день.)
 
-()
-
-
-
-===============================================================================================================================================
-
-
-()
-
-
-
-===============================================================================================================================================
-
-
-()
-
-
+SELECT COALESCE(incm.inc, 0) - COALESCE(outc.out, 0) Remain
+FROM (
+	SELECT SUM(inc) inc
+	FROM Income_o
+	WHERE date < '4/15/2001'
+) incm,
+(
+	SELECT SUM(out) out
+	FROM Outcome_o
+	WHERE date < '4/15/2001'
+) outc
 
 ===============================================================================================================================================
 
+Exercise: 63 (Serge I: 2003-04-08)
+Find the names of different passengers that ever travelled more than once occupying seats with the same number.
+(Определить имена разных пассажиров, когда-либо летевших на одном и том же месте более одного раза.)
 
-()
-
-
-
-===============================================================================================================================================
-
-
-()
-
-
-
-===============================================================================================================================================
-
-
-()
-
-
+SELECT name
+FROM Passenger
+WHERE ID_psg IN
+(
+	SELECT ID_psg
+	FROM Pass_in_trip
+	GROUP BY ID_psg, place
+	HAVING COUNT(*) > 1
+)
 
 ===============================================================================================================================================
 
+Exercise: 64 (Serge I: 2010-06-04)
+Using the Income and Outcome tables, determine for each buy-back center the days when it received funds but made no payments, and vice versa.
+Result set: point, date, type of operation (inc/out), sum of money per day.
+(Используя таблицы Income и Outcome, для каждого пункта приема определить дни, когда был приход, но не было расхода и наоборот.
+Вывод: пункт, дата, тип операции (inc/out), денежная сумма за день.)
 
-()
+WITH incm AS (
+	SELECT point, date, SUM(inc) sumInc
+	FROM Income
+	WHERE CONCAT(point,date) NOT IN (SELECT CONCAT(point,date) FROM Outcome)
+	GROUP BY point, date
+),
+outc AS (
+	SELECT point, date, SUM(out) sumOut
+	FROM Outcome
+	WHERE CONCAT(point,date) NOT IN (SELECT CONCAT(point,date) FROM Income)
+	GROUP BY point, date
+)
 
+	SELECT i.point, i.date, 'inc' type, i.sumInc
+	FROM incm i
+UNION ALL
+	SELECT o.point, o.date, 'out' type, o.sumOut
+	FROM outc o
 
+===============================================================================================================================================
+
+Exercise: 65 (Serge I: 2009-08-24)
+Number the unique pairs {maker, type} in the Product table, ordering them as follows:
+- maker name in ascending order;
+- type of product (type) in the order PC, Laptop, Printer.
+If a manufacturer produces more than one type of product, its name should be displayed in the first row only;
+other rows for THIS manufacturer should contain an empty string (').
+(Пронумеровать уникальные пары {maker, type} из Product, упорядочив их следующим образом:
+- имя производителя (maker) по возрастанию;
+- тип продукта (type) в порядке PC, Laptop, Printer.
+Если некий производитель выпускает несколько типов продукции, то выводить его имя только в первой строке;
+остальные строки для ЭТОГО производителя должны содержать пустую строку символов ('').)
+
+SELECT ROW_NUMBER() OVER(ORDER BY maker, t) num,
+	CASE WHEN maker = LAG(maker) OVER(ORDER BY maker) THEN ''
+	     ELSE maker
+	END maker,
+	type
+FROM (
+	SELECT DISTINCT maker, type, 
+	CASE WHEN type = 'PC' THEN 1
+	     WHEN type = 'Laptop' THEN 2
+	     WHEN type = 'Printer' THEN 3
+	END t
+	FROM Product
+) query
+
+===============================================================================================================================================
+
+Exercise: 66 (Serge I: 2003-04-09)
+For all days between 2003-04-01 and 2003-04-07 find the number of trips from Rostov.
+Result set: date, number of trips.
+(Для всех дней в интервале с 01/04/2003 по 07/04/2003 определить число рейсов из Rostov.
+Вывод: дата, количество рейсов)
+
+WITH dateSeries(Dt) AS
+(
+	SELECT CAST('2003-04-01' AS DATETIME)
+  UNION ALL
+	SELECT Dt + 1 FROM dateSeries WHERE Dt < '2003-04-07'
+),
+tripsNum AS (
+	SELECT p.date, COUNT(p.trip_no) Qty
+	FROM Trip t,
+	(	
+		SELECT DISTINCT trip_no, date
+		FROM Pass_in_trip
+	) p 
+	WHERE t.town_from = 'Rostov'
+	  AND p.trip_no= t.trip_no
+	  AND p.date BETWEEN '2003-04-01' AND '2003-04-07'
+	GROUP BY p.date
+)
+
+SELECT d.Dt, COALESCE(t.Qty, 0) Qty
+FROM tripsNum t
+RIGHT JOIN dateSeries d ON d.Dt = t.date
+
+===============================================================================================================================================
+
+Exercise: 67 (Serge I: 2010-03-27)
+Find out the number of routes with the greatest number of flights (trips).
+Notes.
+1) A - B and B - A are to be considered DIFFERENT routes.
+2) Use the Trip table only.
+(Найти количество маршрутов, которые обслуживаются наибольшим числом рейсов.
+Замечания.
+1) A - B и B - A считать РАЗНЫМИ маршрутами.
+2) Использовать только таблицу Trip)
+
+SELECT COUNT(maxCount) Qrt
+FROM (
+	SELECT COUNT(trip_no) maxCount, town_from, town_to
+	FROM Trip
+	GROUP BY town_from, town_to
+	HAVING COUNT(trip_no) = (
+				 SELECT MAX(tripCount)
+				 FROM (
+					SELECT COUNT(trip_no) tripCount
+					FROM Trip
+					GROUP BY town_from, town_to
+				      ) subQuery
+				)
+) query
+
+===============================================================================================================================================
+
+Exercise: 68 (Serge I: 2010-03-27)
+Find out the number of routes with the greatest number of flights (trips).
+Notes.
+1) A - B and B - A are to be considered the SAME route.
+2) Use the Trip table only.
+(Найти количество маршрутов, которые обслуживаются наибольшим числом рейсов.
+Замечания.
+1) A - B и B - A считать ОДНИМ И ТЕМ ЖЕ маршрутом.
+2) Использовать только таблицу Trip)
+
+WITH allRoutes AS (
+	SELECT COUNT(*) total, town_from tfrom, town_to tto,
+	       ROW_NUMBER() OVER (ORDER BY town_from, town_to) num
+	FROM Trip
+	GROUP BY town_from, town_to
+),
+sameRoutes AS (
+	SELECT	t.total,
+		CASE WHEN t.num > a.num THEN t.tto ELSE t.tfrom END tfr,
+		CASE WHEN t.num > a.num THEN t.tfrom ELSE t.tto	END tt,
+		t.num
+	FROM allRoutes t
+	LEFT JOIN allRoutes a ON t.tfrom = a.tto AND t.tto = a.tfrom
+)
+
+SELECT COUNT(*)
+FROM (
+	SELECT RANK() OVER(ORDER BY SUM(total) DESC) rank
+	FROM sameRoutes
+	GROUP BY tfr, tt
+     ) query
+WHERE rank = 1
+
+===============================================================================================================================================
+
+Exercise: 69 (Serge I: 2011-01-06)
+Using the Income and Outcome tables, find out the balance for each buy-back center by the end of each day when funds were received or payments were made.
+Note that the cash isn’t withdrawn, and the unspent balance/debt is carried forward to the next day.
+Result set: buy-back center ID (point), date in dd/mm/yyyy format, unspent balance/debt by the end of this day.
+
+(По таблицам Income и Outcome для каждого пункта приема найти остатки денежных средств на конец каждого дня,
+в который выполнялись операции по приходу и/или расходу на данном пункте.
+Учесть при этом, что деньги не изымаются, а остатки/задолженность переходят на следующий день.
+Вывод: пункт приема, день в формате "dd/mm/yyyy", остатки/задолженность на конец этого дня.)
+
+WITH Outc AS(
+	SELECT point, date, SUM(out) out
+	FROM Outcome o
+	GROUP BY point, date
+),
+Incm AS(
+	SELECT point, date, SUM(inc) inc
+	FROM Income i
+	GROUP BY point, date
+),
+dailyBalance AS (
+	SELECT  COALESCE(i.point, o.point) point,
+		COALESCE(i.date, o.date) day,
+		(ISNULL(i.inc, 0)- ISNULL(o.out, 0)) day_total		
+	FROM Incm i 
+	FULL JOIN Outc o ON i.point = o.point AND i.date = o.date
+)
+
+SELECT point, FORMAT(day, 'dd/MM/yyyy') day,
+	SUM(day_total) OVER (PARTITION BY point ORDER BY day) rem
+FROM dailyBalance
+
+===============================================================================================================================================
+
+Exercise: 70 (Serge I: 2003-02-14)
+Get the battles in which at least three ships from the same country took part.
+(Укажите сражения, в которых участвовало по меньшей мере три корабля одной и той же страны.)
+
+WITH allShips AS (
+	SELECT battle, country, ship
+	FROM Outcomes o
+	LEFT JOIN Ships s ON o.ship = s.name
+	JOIN Classes c ON c.class = ISNULL(s.class, o.ship)
+)
+
+SELECT DISTINCT battle
+FROM allShips
+GROUP BY battle, country
+HAVING COUNT(ship) > 2
 
 ===============================================================================================================================================
