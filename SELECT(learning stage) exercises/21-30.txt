@@ -69,7 +69,8 @@ WHERE price = (SELECT MAX(price)
 Exercise: 25 (Serge I: 2003-02-14)
 Find the printer makers also producing PCs with the lowest RAM capacity and the highest processor speed of all PCs having the lowest RAM capacity.
 Result set: maker.
-()
+(Найдите производителей принтеров, которые производят ПК с наименьшим объемом RAM и с самым быстрым процессором среди всех ПК, имеющих наименьший объем RAM.
+Вывести: Maker)
 
 WITH requiredPC AS
 (
@@ -101,7 +102,8 @@ WHERE maker IN  (SELECT maker
 Exercise: 26 (Serge I: 2003-02-14)
 Find out the average price of PCs and laptops produced by maker A.
 Result set: one overall average price for all items.
-()
+(Найдите среднюю цену ПК и ПК-блокнотов, выпущенных производителем A (латинская буква).
+Вывести: одна общая средняя цена.)
 
 WITH models  AS (SELECT model FROM Product
 		 WHERE maker = 'A' AND type IN ('PC', 'Laptop')
@@ -124,21 +126,22 @@ FROM allItems
 Exercise: 27 (Serge I: 2003-02-03)
 Find out the average hard disk drive capacity of PCs produced by makers who also manufacture printers.
 Result set: maker, average HDD capacity.
-()
+(Найдите средний размер диска ПК каждого из тех производителей, которые выпускают и принтеры.
+Вывести: maker, средний размер HD.)
 
-WITH pcMakers AS
-(SELECT maker, model
- FROM Product
- WHERE type = 'PC'
-   AND maker IN (SELECT maker
+WITH pcMakers AS (
+SELECT maker, model
+FROM Product
+WHERE type = 'PC'
+  AND maker IN (SELECT maker
 		 FROM Product
 		 WHERE type = 'Printer'
 		)
 ),
 
-pcModels AS
-(SELECT m.maker, p.hd
- FROM pcMakers m INNER JOIN PC p ON m.model = p.model
+pcModels AS (
+SELECT m.maker, p.hd
+FROM pcMakers m INNER JOIN PC p ON m.model = p.model
 )
 
 SELECT maker, AVG(hd) Average_HDD
@@ -149,7 +152,7 @@ GROUP BY maker
 
 Exercise: 28 (Serge I: 2012-05-04)
 Using Product table, find out the number of makers who produce only one model.
-()
+(Используя таблицу Product, определить количество производителей, выпускающих по одной модели.)
 
 SELECT COUNT(*)
 FROM
@@ -165,7 +168,8 @@ FROM
 Exercise: 29 (Serge I: 2003-02-14)
 Under the assumption that receipts of money (inc) and payouts (out) are registered not more than once a day for each collection point [i.e. the primary key consists of (point, date)], write a query displaying cash flow data (point, date, income, expense).
 Use Income_o and Outcome_o tables.
-()
+(В предположении, что приход и расход денег на каждом пункте приема фиксируется не чаще одного раза в день [т.е. первичный ключ (пункт, дата)], написать запрос с выходными данными (пункт, дата, приход, расход).
+Использовать таблицы Income_o и Outcome_o.)
 
 SELECT i.point, i.date, i.inc, o.out
 FROM Income_o AS i
@@ -181,18 +185,21 @@ LEFT JOIN Income_o AS i ON i.point = o.point
 ==================================================================================
 
 Exercise: 30 (Serge I: 2003-02-14)
-Under the assumption that receipts of money (inc) and payouts (out) can be registered any number of times a day for each collection point [i.e. the code column is the primary key], display a table with one corresponding row for each operating date of each collection point.
+Under the assumption that receipts of money (inc) and payouts (out) can be registered any number of times a day for each collection point [i.e. the code column is the primary key],
+display a table with one corresponding row for each operating date of each collection point.
 Result set: point, date, total payout per day (out), total money intake per day (inc).
 Missing values are considered to be NULL.
-()
+(В предположении, что приход и расход денег на каждом пункте приема фиксируется произвольное число раз (первичным ключом в таблицах является столбец code),
+требуется получить таблицу, в которой каждому пункту за каждую дату выполнения операций будет соответствовать одна строка.
+Вывод: point, date, суммарный расход пункта за день (out), суммарный приход пункта за день (inc). Отсутствующие значения считать неопределенными (NULL).)
 
-WITH incomeSUM (point, date, inc) AS
-(SELECT point, date, SUM(inc)
+WITH incomeSUM (point, date, inc) AS (
+SELECT point, date, SUM(inc)
 FROM Income i
 GROUP BY point, date
 ),
-outcomeSum (point, date, out) AS
-(SELECT point, date, SUM(out)
+outcomeSum (point, date, out) AS (
+SELECT point, date, SUM(out)
 FROM Outcome
 GROUP BY point, date
 )
@@ -208,75 +215,5 @@ SELECT i.point, i.date, SUM(out), SUM(inc)
 FROM incomeSum i 
 LEFT JOIN outcomeSum o ON i.point = o.point AND i.date = o.date
 GROUP BY i.point, i.date
-
-==================================================================================
-
-
-()
-
-
-
-==================================================================================
-
-
-()
-
-
-
-==================================================================================
-
-
-()
-
-
-
-==================================================================================
-
-
-()
-
-
-
-==================================================================================
-
-
-()
-
-
-
-==================================================================================
-
-
-()
-
-
-
-==================================================================================
-
-
-()
-
-
-
-==================================================================================
-
-
-()
-
-
-
-==================================================================================
-
-
-()
-
-
-
-==================================================================================
-
-
-()
-
-
 
 ==================================================================================
