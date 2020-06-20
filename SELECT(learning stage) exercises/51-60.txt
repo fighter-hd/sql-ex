@@ -1,70 +1,217 @@
 ﻿
+Exercise: 51 (Serge I: 2003-02-17)
+Find the names of the ships with the largest number of guns among all ships having the same displacement (including ships in the Outcomes table).
+(Найдите названия кораблей, имеющих наибольшее число орудий среди всех имеющихся кораблей такого же водоизмещения (учесть корабли из таблицы Outcomes).)
 
-()
+WITH shipsData AS (
+SELECT a.name, c.numGuns, c.displacement
+FROM (
+	SELECT name, class FROM Ships
+   UNION
+	SELECT ship, ship FROM Outcomes
 
+     ) a JOIN Classes c ON a.class = c.class
+)  
 
-
-===============================================================================================================================================
-
-
-()
-
-
-
-===============================================================================================================================================
-
-
-()
-
-
-
-===============================================================================================================================================
-
-
-()
-
-
+SELECT name
+FROM shipsData i
+WHERE numGuns >= ALL (
+			SELECT numGuns
+			FROM shipsData o
+			WHERE i.displacement = o.displacement
+		     )
 
 ===============================================================================================================================================
 
+Exercise: 52 (qwrqwr: 2010-04-23)
+Determine the names of all ships in the Ships table that can be a Japanese battleship having at least nine main guns with a caliber of less than 19 inches
+and a displacement of not more than 65 000 tons.
+(Определить названия всех кораблей из таблицы Ships, которые могут быть линейным японским кораблем,
+имеющим число главных орудий не менее девяти, калибр орудий менее 19 дюймов и водоизмещение не более 65 тыс.тонн)
 
-()
-
-
-
-===============================================================================================================================================
-
-
-()
-
-
-
-===============================================================================================================================================
-
-
-()
-
-
+SELECT name
+FROM Ships s, Classes c
+WHERE s.class = c.class
+  AND (country = 'Japan' OR country IS NULL)
+  AND (type = 'bb' OR type IS NULL)
+  AND (numGuns >= 9 OR numGuns IS NULL)
+  AND (bore < 19 OR bore IS NULL)
+  AND (displacement <= 65000 OR displacement IS NULL)
 
 ===============================================================================================================================================
 
+Exercise: 53 (Serge I: 2002-11-05)
+With a precision of two decimal places, determine the average number of guns for the battleship classes.
+(Определите среднее число орудий для классов линейных кораблей.
+Получить результат с точностью до 2-х десятичных знаков.)
 
-()
-
-
-
-===============================================================================================================================================
-
-
-()
-
-
+SELECT CAST(AVG(numGuns * 1.0) AS NUMERIC(6, 2))
+FROM Classes
+WHERE type = 'bb'
 
 ===============================================================================================================================================
 
+Exercise: 54 (Serge I: 2003-02-14)
+With a precision of two decimal places, determine the average number of guns for all battleships (including the ones in the Outcomes table).
+(С точностью до 2-х десятичных знаков определите среднее число орудий всех линейных кораблей (учесть корабли из таблицы Outcomes).)
 
-()
+SELECT CAST(AVG(numGuns * 1.0) AS NUMERIC(6,2))
+FROM (
+	SELECT numGuns
+	FROM (
+		SELECT name, class FROM Ships
+	  UNION
+		SELECT ship, ship FROM Outcomes
+	) s
+	JOIN Classes c ON c.class = s.class
+	WHERE type = 'bb'
+) a
 
+===============================================================================================================================================
 
+Exercise: 55 (Serge I: 2003-02-16)
+For each class, determine the year the first ship of this class was launched.
+If the lead ship’s year of launch is not known, get the minimum year of launch for the ships of this class.
+Result set: class, year.
+(Для каждого класса определите год, когда был спущен на воду первый корабль этого класса. Если год спуска на воду головного корабля неизвестен,
+определите минимальный год спуска на воду кораблей этого класса. Вывести: класс, год.)
+
+SELECT c.class, MIN(COALESCE(launched, NULL))
+FROM Ships s RIGHT JOIN Classes c ON c.class = s.class
+GROUP BY c.class
+
+===============================================================================================================================================
+
+Exercise: 56 (Serge I: 2003-02-16)
+For each class, find out the number of ships of this class that were sunk in battles.
+Result set: class, number of ships sunk.
+(Для каждого класса определите число кораблей этого класса, потопленных в сражениях. Вывести: класс и число потопленных кораблей.)
+
+WITH allShips AS (
+  SELECT name, class
+  FROM Ships
+UNION
+  SELECT ship, ship
+  FROM Outcomes
+),
+Results AS (
+  SELECT name, class, result
+  FROM allShips, Outcomes
+  WHERE name = ship
+)
+
+SELECT c.class, SUM(IIF(result = 'sunk', 1, 0)) sunks
+FROM Results r
+RIGHT JOIN Classes c ON r.class = c.class
+GROUP BY c.class
+
+===============================================================================================================================================
+
+Exercise: 57 (Serge I: 2003-02-14)
+For classes having irreparable combat losses and at least three ships in the database, display the name of the class and the number of ships sunk.
+(Для классов, имеющих потери в виде потопленных кораблей и не менее 3 кораблей в базе данных, вывести имя класса и число потопленных кораблей.)
+
+WITH allShips AS (
+  SELECT name, class
+  FROM Ships
+UNION
+  SELECT ship, ship
+  FROM Outcomes
+),
+Results AS (
+  SELECT name, class, result
+  FROM allShips LEFT JOIN Outcomes ON name = ship
+)
+
+SELECT c.class, COUNT(result) sunken
+FROM Classes c, Results r
+WHERE c.class = r.class
+  AND result = 'sunk'
+  AND c.class IN (
+			SELECT ic.class
+			FROM Classes ic, allShips a
+			WHERE ic.class = a.class
+			GROUP BY ic.class
+			HAVING COUNT(name) >= 3
+		 )
+GROUP BY c.class
+
+===============================================================================================================================================
+
+Exercise: 58 (Serge I: 2009-11-13)
+For each product type and maker in the Product table, find out, with a precision of two decimal places, the percentage ratio of the number of models of the actual type
+produced by the actual maker to the total number of models by this maker.
+Result set: maker, product type, the percentage ratio mentioned above.
+(Для каждого типа продукции и каждого производителя из таблицы Product c точностью до двух десятичных знаков найти процентное отношение числа моделей данного типа
+данного производителя к общему числу моделей этого производителя.
+Вывод: maker, type, процентное отношение числа моделей данного типа к общему числу моделей производителя)
+
+WITH typeCount AS (
+	SELECT maker, type, COUNT(model) modelsNum FROM Product 
+	GROUP BY maker, type
+),
+allTypeCount AS (
+	SELECT maker, COUNT(model) allModelsNum FROM Product
+	GROUP BY maker
+),
+allData AS (
+	SELECT tc.maker, type, tc.modelsNum, ac.allModelsNum FROM typeCount tc, allTypeCount ac
+	WHERE tc.maker = ac.maker
+),
+makerTypeCombinations AS (
+	SELECT DISTINCT first.maker, second.type
+	FROM Product first, Product second
+)
+
+SELECT m.maker, m.type,
+       ISNULL (
+	  CAST(
+		CAST(modelsNum AS NUMERIC(6,2))
+		/ allModelsNum
+		* 100 AS NUMERIC(6,2)
+	      ),
+	  0 ) prc
+FROM makerTypeCombinations m
+FULL JOIN allData a ON a.maker= m.maker AND a.type = m.type
+
+===============================================================================================================================================
+
+Exercise: 59 (Serge I: 2003-02-15)
+Calculate the cash balance of each buy-back center for the database with money transactions being recorded not more than once a day.
+Result set: point, balance.
+(Посчитать остаток денежных средств на каждом пункте приема для базы данных с отчетностью не чаще одного раза в день. Вывод: пункт, остаток.)
+
+SELECT point, (COALESCE(SUM(inc), 0) - COALESCE(SUM(out), 0)) Remain
+FROM (
+	SELECT point, inc, NULL out FROM Income_o
+
+UNION ALL
+
+	SELECT point, NULL inc, out FROM Outcome_o
+) allData
+GROUP BY point
+
+===============================================================================================================================================
+
+Exercise: 60 (Serge I: 2003-02-15)
+For the database with money transactions being recorded not more than once a day, calculate the cash balance of each buy-back center at the beginning of 4/15/2001.
+Note: exclude centers not having any records before the specified date.
+Result set: point, balance
+(Посчитать остаток денежных средств на начало дня 15/04/01 на каждом пункте приема для базы данных с отчетностью не чаще одного раза в день. Вывод: пункт, остаток.
+Замечание. Не учитывать пункты, информации о которых нет до указанной даты.)
+
+SELECT incm.point, (COALESCE(incm.inc, 0) - COALESCE(outc.out, 0)) Remain
+FROM (
+	SELECT point, SUM(inc) inc
+	FROM Income_o
+	WHERE date < '4/15/2001'
+	GROUP BY point
+) incm
+LEFT JOIN (
+	SELECT point, SUM(out) out
+	FROM Outcome_o
+	WHERE date < '4/15/2001'
+	GROUP BY point
+) outc ON incm.point = outc.point
 
 ===============================================================================================================================================
