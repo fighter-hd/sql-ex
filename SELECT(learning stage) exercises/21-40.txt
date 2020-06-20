@@ -1,0 +1,282 @@
+﻿
+Exercise: 21 (Serge I: 2003-02-13)
+Find out the maximum PC price for each maker having models in the PC table. Result set: maker, maximum price.
+(Найдите максимальную цену ПК, выпускаемых каждым производителем, у которого есть модели в таблице PC.
+Вывести: maker, максимальная цена.)
+
+SELECT p.maker, MAX(pc.price)
+FROM Product p, PC pc
+WHERE p.model = pc.model
+GROUP BY p.maker
+
+==================================================================================
+
+Exercise: 22 (Serge I: 2003-02-13)
+For each value of PC speed that exceeds 600 MHz, find out the average price of PCs with identical speeds.
+Result set: speed, average price.
+(Для каждого значения скорости ПК, превышающего 600 МГц, определите среднюю цену ПК с такой же скоростью.
+Вывести: speed, средняя цена.)
+
+SELECT speed, AVG(price)
+FROM PC
+WHERE speed > 600
+GROUP BY speed
+
+==================================================================================
+
+Get the makers producing both PCs having a speed of 750 MHz or higher and laptops with a speed of 750 MHz or higher.
+Result set: maker
+(Найдите производителей, которые производили бы как ПК
+со скоростью не менее 750 МГц, так и ПК-блокноты со скоростью не менее 750 МГц.
+Вывести: Maker)
+
+SELECT maker
+FROM Product p, PC pc
+WHERE pc.speed >= 750 AND p.model = pc.model
+
+INTERSECT
+
+SELECT maker
+FROM Product p, Laptop l
+WHERE l.speed >= 750 AND p.model = l.model
+
+==================================================================================
+
+Exercise: 24 (Serge I: 2003-02-03)
+List the models of any type having the highest price of all products present in the database.
+(Перечислите номера моделей любых типов, имеющих самую высокую цену по всей имеющейся в базе данных продукции.)
+
+WITH allProducts AS (
+	SELECT model, price
+	FROM PC
+
+	UNION 
+	SELECT model, price
+	FROM Laptop
+
+	UNION
+	SELECT model, price
+	FROM Printer
+)
+
+SELECT model
+FROM allProducts
+WHERE price = (SELECT MAX(price)
+		FROM allProducts)
+
+==================================================================================
+
+Exercise: 25 (Serge I: 2003-02-14)
+Find the printer makers also producing PCs with the lowest RAM capacity and the highest processor speed of all PCs having the lowest RAM capacity.
+Result set: maker.
+()
+
+WITH requiredPC AS
+(
+   SELECT model
+   FROM PC
+   WHERE ram =  (SELECT MIN(ram)
+		 FROM PC
+		)
+     AND speed = (SELECT MAX(speed)
+   		  FROM PC
+   		  WHERE ram =  (SELECT MIN(ram)
+		 		FROM PC
+				)
+		 )
+)
+
+SELECT DISTINCT maker
+FROM Product
+WHERE maker IN  (SELECT maker
+		 FROM Product
+		 WHERE type = 'Printer'
+		)
+  AND model IN (SELECT model
+		FROM requiredPC
+		)
+
+==================================================================================
+
+Exercise: 26 (Serge I: 2003-02-14)
+Find out the average price of PCs and laptops produced by maker A.
+Result set: one overall average price for all items.
+()
+
+WITH models  AS (SELECT model FROM Product
+		 WHERE maker = 'A' AND type IN ('PC', 'Laptop')
+		),
+
+    allItems AS (SELECT price FROM PC
+		 WHERE model IN (SELECT model FROM models)
+
+		 UNION ALL
+
+		 SELECT price FROM Laptop
+		 WHERE model IN (SELECT model FROM models)
+		)
+
+SELECT AVG(price)
+FROM allItems
+
+==================================================================================
+
+Exercise: 27 (Serge I: 2003-02-03)
+Find out the average hard disk drive capacity of PCs produced by makers who also manufacture printers.
+Result set: maker, average HDD capacity.
+()
+
+WITH pcMakers AS
+(SELECT maker, model
+ FROM Product
+ WHERE type = 'PC'
+   AND maker IN (SELECT maker
+		 FROM Product
+		 WHERE type = 'Printer'
+		)
+),
+
+pcModels AS
+(SELECT m.maker, p.hd
+ FROM pcMakers m INNER JOIN PC p ON m.model = p.model
+)
+
+SELECT maker, AVG(hd) Average_HDD
+FROM pcModels
+GROUP BY maker
+
+==================================================================================
+
+Exercise: 28 (Serge I: 2012-05-04)
+Using Product table, find out the number of makers who produce only one model.
+()
+
+SELECT COUNT(*)
+FROM
+(
+  SELECT maker
+  FROM Product
+  GROUP BY maker
+  HAVING COUNT(model) = 1
+) a
+
+==================================================================================
+
+Exercise: 29 (Serge I: 2003-02-14)
+Under the assumption that receipts of money (inc) and payouts (out) are registered not more than once a day for each collection point [i.e. the primary key consists of (point, date)], write a query displaying cash flow data (point, date, income, expense).
+Use Income_o and Outcome_o tables.
+()
+
+SELECT i.point, i.date, i.inc, o.out
+FROM Income_o AS i
+LEFT JOIN Outcome_o AS o ON i.point = o.point
+			AND i.date = o.date
+UNION
+
+SELECT o.point, o.date, i.inc, o.out
+FROM Outcome_o AS o
+LEFT JOIN Income_o AS i ON i.point = o.point
+			AND i.date = o.date
+
+==================================================================================
+
+Exercise: 30 (Serge I: 2003-02-14)
+Under the assumption that receipts of money (inc) and payouts (out) can be registered any number of times a day for each collection point [i.e. the code column is the primary key], display a table with one corresponding row for each operating date of each collection point.
+Result set: point, date, total payout per day (out), total money intake per day (inc).
+Missing values are considered to be NULL.
+()
+
+WITH incomeSUM (point, date, inc) AS
+(SELECT point, date, SUM(inc)
+FROM Income i
+GROUP BY point, date
+),
+outcomeSum (point, date, out) AS
+(SELECT point, date, SUM(out)
+FROM Outcome
+GROUP BY point, date
+)
+
+SELECT o.point, o.date, SUM(out), SUM(inc)
+FROM outcomeSum o
+LEFT JOIN incomeSum i ON i.point = o.point AND i.date = o.date
+GROUP BY o.point, o.date
+
+UNION
+
+SELECT i.point, i.date, SUM(out), SUM(inc)
+FROM incomeSum i 
+LEFT JOIN outcomeSum o ON i.point = o.point AND i.date = o.date
+GROUP BY i.point, i.date
+
+==================================================================================
+
+
+()
+
+
+
+==================================================================================
+
+
+()
+
+
+
+==================================================================================
+
+
+()
+
+
+
+==================================================================================
+
+
+()
+
+
+
+==================================================================================
+
+
+()
+
+
+
+==================================================================================
+
+
+()
+
+
+
+==================================================================================
+
+
+()
+
+
+
+==================================================================================
+
+
+()
+
+
+
+==================================================================================
+
+
+()
+
+
+
+==================================================================================
+
+
+()
+
+
+
+==================================================================================
