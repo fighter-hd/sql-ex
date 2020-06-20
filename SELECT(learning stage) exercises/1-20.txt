@@ -1,8 +1,8 @@
-Exercise: 1 (Serge I: 2002-09-30)
+п»їExercise: 1 (Serge I: 2002-09-30)
 Find the model number, speed and hard drive capacity for all the PCs with prices below $500.
 Result set: model, speed, hd.
-(Найдите номер модели, скорость и размер жесткого диска для всех ПК стоимостью менее 500 дол.
-Вывести: model, speed и hd)
+(РќР°Р№РґРёС‚Рµ РЅРѕРјРµСЂ РјРѕРґРµР»Рё, СЃРєРѕСЂРѕСЃС‚СЊ Рё СЂР°Р·РјРµСЂ Р¶РµСЃС‚РєРѕРіРѕ РґРёСЃРєР° РґР»СЏ РІСЃРµС… РџРљ СЃС‚РѕРёРјРѕСЃС‚СЊСЋ РјРµРЅРµРµ 500 РґРѕР».
+Р’С‹РІРµСЃС‚Рё: model, speed Рё hd)
 
 SELECT model, speed, hd
 FROM PC
@@ -12,7 +12,7 @@ WHERE price < 500
 
 Exercise: 2 (Serge I: 2002-09-21)
 List all printer makers. Result set: maker.
-(Найдите производителей принтеров. Вывести: maker)
+(РќР°Р№РґРёС‚Рµ РїСЂРѕРёР·РІРѕРґРёС‚РµР»РµР№ РїСЂРёРЅС‚РµСЂРѕРІ. Р’С‹РІРµСЃС‚Рё: maker)
 
 SELECT DISTINCT maker
 FROM Product
@@ -22,7 +22,7 @@ WHERE type = 'Printer'
 
 Exercise: 3 (Serge I: 2002-09-30)
 Find the model number, RAM and screen size of the laptops with prices over $1000.
-(Найдите номер модели, объем памяти и размеры экранов ПК-блокнотов, цена которых превышает 1000 дол.)
+(РќР°Р№РґРёС‚Рµ РЅРѕРјРµСЂ РјРѕРґРµР»Рё, РѕР±СЉРµРј РїР°РјСЏС‚Рё Рё СЂР°Р·РјРµСЂС‹ СЌРєСЂР°РЅРѕРІ РџРљ-Р±Р»РѕРєРЅРѕС‚РѕРІ, С†РµРЅР° РєРѕС‚РѕСЂС‹С… РїСЂРµРІС‹С€Р°РµС‚ 1000 РґРѕР».)
 
 SELECT model, ram, screen
 FROM Laptop
