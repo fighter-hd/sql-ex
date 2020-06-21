@@ -1,70 +1,264 @@
 ﻿
+Exercise: 101 (qwrqwr: 2013-03-29)
+The Printer table is sorted by the code field in ascending order.
+The ordered rows form groups: the first group starts with the first row, each row having color=’n’ begins a new group,
+the groups of rows don’t overlap. For each group, determine the maximum value of the model field (max_model),
+the number of unique printer types (distinct_types_cou), and the average price (avg_price).
+For all table rows, display code, model, color, type, price, max_model, distinct_types_cou, avg_price.
+(Таблица Printer сортируется по возрастанию поля code.
+Упорядоченные строки составляют группы: первая группа начинается с первой строки, каждая строка со значением color='n'
+начинает новую группу, группы строк не перекрываются. Для каждой группы определить: наибольшее значение
+поля model (max_model), количество уникальных типов принтеров (distinct_types_cou) и среднюю цену (avg_price).
+Для всех строк таблицы вывести: code, model, color, type, price, max_model, distinct_types_cou, avg_price.)
 
-()
+WITH rw AS (
+	SELECT code, color, ROW_NUMBER() OVER(ORDER BY code) rank
+	FROM Printer
+	WHERE color = 'n'
+),
+rankData AS (
+	SELECT p.*,
+		COALESCE(rank,
+			(SELECT TOP 1 rank
+			 FROM rw
+			 WHERE code < p.code
+			 ORDER BY code DESC
+			)
+		) rank
+	FROM Printer p
+	LEFT JOIN rw ON p.code = rw.code
+),
+moreData AS (
+	SELECT *, DENSE_RANK() OVER(PARTITION BY rank
+				    ORDER BY type
+		   ) typeRank
+	FROM rankData
+)
 
-
-
-===============================================================================================================================================
-
-
-()
-
-
-
-===============================================================================================================================================
-
-
-()
-
-
-
-===============================================================================================================================================
-
-
-()
-
-
-
-===============================================================================================================================================
-
-
-()
-
-
-
-===============================================================================================================================================
-
-
-()
-
-
-
-===============================================================================================================================================
-
-
-()
-
-
+SELECT code, model, color, type, price,
+	MAX(model) OVER(PARTITION BY rank) max_model,
+	MAX(typeRank) OVER(PARTITION BY rank) distct_types,
+	AVG(price) OVER(PARTITION BY rank) avg_price
+FROM moreData
 
 ===============================================================================================================================================
 
+Exercise: 102 (Serge I: 2003-04-29)
+Find the names of different passengers who travelled between two towns only (one way or back and forth).
+(Определить имена разных пассажиров, которые летали
+только между двумя городами (туда и/или обратно).)
 
-()
+WITH flights AS (
+	SELECT p.ID_psg, t.town_to, t.town_from
+	FROM Pass_in_trip p, Trip t
+	WHERE t.trip_no = p.trip_no
+)
 
-
+SELECT (SELECT p.name FROM Passenger p WHERE t.ID_psg = p.ID_psg)
+FROM (
+	SELECT ID_psg, town_to AS town
+	FROM flights
+  UNION
+	SELECT ID_psg, town_from
+	FROM flights
+) t
+GROUP BY ID_psg
+HAVING COUNT(town) < 3
 
 ===============================================================================================================================================
 
+Exercise: 103 (qwrqwr: 2013-05-17)
+Find out the three smallest and three greatest trip numbers.
+Output them in a single row with six columns, ordered from the least trip number to the greatest one.
+Note: it is assumed the Trip table contains 6 or more rows.
+(Выбрать три наименьших и три наибольших номера рейса.
+Вывести их в шести столбцах одной строки, расположив в порядке от наименьшего к наибольшему.
+Замечание: считать, что таблица Trip содержит не менее шести строк.)
 
-()
+WITH rowNum AS (
+	SELECT trip_no, ROW_NUMBER() OVER (ORDER BY trip_no) rn
+	FROM Trip
+),
+allData AS (
+	SELECT *, MAX(rn) OVER() maxRn
+	FROM rowNum
+)
 
-
+SELECT  (SELECT trip_no FROM allData WHERE rn = 1) min1,
+	(SELECT trip_no FROM allData WHERE rn = 2) min2,
+	(SELECT trip_no FROM allData WHERE rn = 3) min3,
+	(SELECT trip_no FROM allData WHERE rn = maxRn - 2) max3,
+	(SELECT trip_no FROM allData WHERE rn = maxRn - 1) max2,
+	(SELECT trip_no FROM allData WHERE rn = maxRn) max1
 
 ===============================================================================================================================================
 
+Exercise: 104 (Serge I: 2013-07-19)
+For each cruiser class whose quantity of guns is known, number its guns sequentially beginning with 1.
+Output: class name, gun ordinal number in 'bc-N' style.
+(Для каждого класса крейсеров, число орудий которого известно, пронумеровать (последовательно от единицы) все орудия.
+Вывод: имя класса, номер орудия в формате 'bc-N'.)
 
-()
+WITH numb AS (
+	SELECT 5*(a-1) + b AS num 
+	FROM (
+		SELECT 1 a UNION ALL SELECT 2 UNION ALL SELECT 3 
+		UNION ALL SELECT 4 UNION ALL SELECT 5
+	) x
+	CROSS JOIN (
+		SELECT 1 b UNION ALL SELECT 2 UNION ALL SELECT 3 
+		UNION ALL SELECT 4 UNION ALL SELECT 5
+	) y
+)
 
+SELECT c.class, CONCAT('bc-', n.num) num
+FROM Classes c, numb n
+WHERE c.type = 'bc'
+  AND n.num <= c.numGuns
 
+===============================================================================================================================================
+
+Exercise: 105 (qwrqwr: 2013-09-11)
+Statisticians Alice, Betty, Carol and Diana are numbering rows in the Product table.
+Initially, all of them have sorted the table rows in ascending order by the names of the makers.
+Alice assigns a new number to each row, sorting the rows belonging to the same maker by model in ascending order.
+The other three statisticians assign identical numbers to all rows having the same maker.
+Betty assigns the numbers starting with one, increasing the number by 1 for each next maker.
+Carol gives a maker the same number the row with this maker's first model receives from Alice.
+Diana assigns a maker the same number the row with this maker's last model receives from Alice.
+Output: maker, model, row numbers assigned by Alice, Betty, Carol, and Diana respectively.
+(Статистики Алиса, Белла, Вика и Галина нумеруют строки у таблицы Product.
+Все четверо упорядочили строки таблицы по возрастанию названий производителей.
+Алиса присваивает новый номер каждой строке, строки одного производителя она упорядочивает по номеру модели.
+Трое остальных присваивают один и тот же номер всем строкам одного производителя.
+Белла присваивает номера начиная с единицы, каждый следующий производитель увеличивает номер на 1.
+У Вики каждый следующий производитель получает такой же номер, какой получила бы первая модель этого производителя у Алисы.
+Галина присваивает каждому следующему производителю тот же номер, который получила бы его последняя модель у Алисы.
+Вывести: maker, model, номера строк получившиеся у Алисы, Беллы, Вики и Галины соответственно.)
+
+WITH data AS (
+	SELECT maker, model,
+		ROW_NUMBER() OVER(ORDER BY maker, model) A,
+		DENSE_RANK() OVER(ORDER BY maker) B,
+		RANK() OVER(ORDER BY maker) C
+	FROM Product
+)
+
+SELECT *, MAX(A) OVER(PARTITION BY maker) D
+FROM data
+
+===============================================================================================================================================
+
+Exercise: 106 (Baser: 2013-09-06)
+Let v1, v2, v3, v4, ... be a sequence of real numbers corresponding to paint amounts b_vol, sorted by b_datetime, b_q_id, and b_v_id in ascending order.
+Find the transformed sequence P1=v1, P2=v1/v2, P3=v1/v2*v3, P4=v1/v2*v3/v4, ..., where each subsequent member is obtained from the preceding one
+by either multiplication by vi (for an odd i) or division by vi (for an even i).
+Output the result as b_datetime, b_q_id, b_v_id, b_vol, Pi, with Pi being the member of the sequence corresponding to the record number i.
+Display Pi with eight decimal places.
+(Пусть v1, v2, v3, v4, ... представляет последовательность вещественных чисел - объемов окрасок b_vol, упорядоченных
+по возрастанию b_datetime, b_q_id, b_v_id. Найти преобразованную последовательность P1=v1, P2=v1/v2, P3=v1/v2*v3, P4=v1/v2*v3/v4, ...,
+где каждый следующий член получается из предыдущего умножением на vi (при нечетных i) или делением на vi (при четных i).
+Результаты представить в виде b_datetime, b_q_id, b_v_id, b_vol, Pi, где Pi - член последовательности, соответствующий номеру записи i.
+Вывести Pi с 8-ю знаками после запятой.)
+
+WITH v AS (
+	SELECT *, ROW_NUMBER() OVER(ORDER BY B_DATETIME, B_Q_ID, B_V_ID) rn
+	FROM utB
+)
+
+SELECT B_DATETIME, B_Q_ID, B_V_ID, B_VOL,
+	CAST(
+	     EXP( SUM( POWER(-1, rn + 1) * LOG(B_VOL)
+		     ) OVER (ORDER BY rn)
+		)
+	     as NUMERIC(38,8)
+	) AS sv
+FROM v
+ORDER BY rn
+
+===============================================================================================================================================
+
+Exercise: 107 (VIG: 2003-09-01)
+Find the company, trip number, and trip date for the fifth passenger from among those who have departed from Rostov in April 2003.
+Note. For this exercise it is assumed two flights can’t depart from Rostov simultaneously.
+(Для пятого по счету пассажира из числа вылетевших из Ростова в апреле 2003 года определить компанию, номер рейса и дату вылета.
+Замечание. Считать, что два рейса одновременно вылететь из Ростова не могут.)
+
+WITH flights AS (
+	SELECT c.name, ps.trip_no, ps.date, t.time_out,
+		ROW_NUMBER() OVER(ORDER BY ps.date, t.time_out) rn
+	FROM Pass_in_trip ps, Trip t, Company c
+	WHERE t.town_from = 'Rostov'
+	  AND ps.date >= '2003-04-01'
+	  AND ps.date < '2003-05-01'
+	  AND ps.trip_no = t.trip_no
+	  AND c.ID_comp = t.ID_comp
+)
+
+SELECT name, trip_no, date
+FROM flights f
+WHERE rn = 5
+
+===============================================================================================================================================
+
+Exercise: 108 (Baser: 2013-10-16)
+The restoration of the exhibits of the Triangles department of the PFAS museum has been carried out according to the performance specification.
+For each record in the utb table, the painters restored the paint on the side of every geometric figure, provided this side had a length equal to b_vol.
+Get all triangles having the paint on all their sides restored, except for equilateral, isosceles, and obtuse ones.
+For each triangle (yet without duplicates), display three values X, Y, Z, where X is the length of the short, Y – of the medium, and Z – of the long triangle side.
+(Реставрация экспонатов секции "Треугольники" музея ПФАН проводилась согласно техническому заданию. Для каждой записи таблицы utb малярами
+подкрашивалась сторона любой фигуры, если длина этой стороны равнялась b_vol.
+Найти окрашенные со всех сторон треугольники, кроме равносторонних, равнобедренных и тупоугольных.
+Для каждого треугольника (но без повторений) вывести три значения X, Y, Z, где X - меньшая, Y - средняя, а Z - большая сторона.)
+
+SELECT DISTINCT b1.B_VOL a, b2.b_vol b, b3.b_vol c
+FROM utB b1, utB b2, utB b3
+WHERE b1.B_VOL < b2.B_VOL AND b2.B_VOL < b3.B_VOL
+AND NOT ( b3.B_VOL > SQRT( SQUARE(b1.B_VOL) + SQUARE(b2.B_VOL)))
+
+===============================================================================================================================================
+
+Exercise: 109 (qwrqwr: 2011-01-13)
+Display:
+1. The names of all squares that are black or white.
+2. The total number of white squares.
+3. The total number of black squares.
+(Вывести:
+1. Названия всех квадратов черного или белого цвета.
+2. Общее количество белых квадратов.
+3. Общее количество черных квадратов.)
+
+WITH reqSqr AS (
+	SELECT (SELECT Q_NAME FROM utQ WHERE Q_ID = B_Q_ID) name,
+		COUNT(*) OVER() Whites, NULL AS Blacks
+	FROM utB
+	GROUP BY B_Q_ID
+	HAVING SUM(B_VOL) = 255 * 3
+UNION ALL
+	SELECT Q_NAME, NULL, COUNT(*) OVER()
+	FROM utQ
+	WHERE Q_ID NOT IN (SELECT B_Q_ID FROM utB)
+)
+
+SELECT name, MAX(Whites) OVER() Whites, MAX(Blacks) OVER() Blacks
+FROM reqSqr
+
+===============================================================================================================================================
+
+Exercise: 110 (Serge I: 2003-12-24)
+Find out the names of different passengers who ever travelled on a flight that took off on Saturday and landed on Sunday.
+(Определить имена разных пассажиров, когда-либо летевших рейсом, который вылетел в субботу, а приземлился в воскресенье.)
+
+WITH reqPassengers AS (
+	SELECT DISTINCT pt.ID_psg
+	FROM Trip t, Pass_in_trip pt
+	WHERE DATENAME(dw, pt.date) = 'Saturday'
+	  AND t.time_in <= t.time_out
+	  AND t.trip_no = pt.trip_no
+)
+
+SELECT p.name
+FROM reqPassengers rp, Passenger p
+WHERE rp.ID_psg = p.ID_psg
 
 ===============================================================================================================================================
