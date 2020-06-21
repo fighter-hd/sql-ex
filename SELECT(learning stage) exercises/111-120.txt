@@ -1,70 +1,333 @@
 ﻿
+Exercise: 111 (Serge I: 2003-12-24)
+Get the squares that are NEITHER white NOR black, and painted with different colors in a 1:1:1 ratio.
+Result set: square name, paint quantity for a single color.
+(Найти НЕ белые и НЕ черные квадраты, которые окрашены разными цветами в пропорции 1:1:1.
+Вывод: имя квадрата, количество краски одного цвета)
 
-()
+WITH squares AS (
+	SELECT b.B_Q_ID, v.V_COLOR, SUM(b.B_VOL) vol
+	FROM utB b, utV v
+	WHERE b.B_V_ID = v.V_ID
+	GROUP BY b.B_Q_ID, v.V_COLOR
+	HAVING SUM(b.B_VOL) > 0 AND SUM(b.B_VOL) < 255
+)
 
-
-
-===============================================================================================================================================
-
-
-()
-
-
-
-===============================================================================================================================================
-
-
-()
-
-
-
-===============================================================================================================================================
-
-
-()
-
-
+SELECT (SELECT Q_NAME FROM utQ q WHERE s.B_Q_ID = q.Q_ID) Q_NAME,
+	MIN(s.vol) Qty
+FROM squares s
+GROUP BY s.B_Q_ID
+HAVING COUNT(s.V_COLOR) = 3 AND MIN(s.vol) = MAX(s.vol)
 
 ===============================================================================================================================================
 
+Exercise: 112 (Serge I: 2003-12-24)
+What maximal number of black squares could be colored white using the remaining paint?
+(Какое максимальное количество черных квадратов можно было бы окрасить в белый цвет
+оставшейся краской)
 
-()
+WITH canRest AS (
+	SELECT v.V_ID AS id, v.V_COLOR AS color,
+		IIF(SUM(B_VOL) IS NULL,
+		    255,
+		    255 - SUM(B_VOL)
+		) rest
+	FROM utV v
+	LEFT JOIN utB b ON v.V_ID = b.B_V_ID
+	GROUP BY v.V_ID, v.V_COLOR
+),
+totalRest AS (
+	SELECT SUM(rest) total
+	FROM canRest
+	GROUP BY color
+)
 
-
-
-===============================================================================================================================================
-
-
-()
-
-
-
-===============================================================================================================================================
-
-
-()
-
-
-
-===============================================================================================================================================
-
-
-()
-
-
-
-===============================================================================================================================================
-
-
-()
-
-
+SELECT IIF(COUNT(*) >= 3,
+	   MIN(total / 255),
+	   0
+	) Qty
+FROM totalRest
 
 ===============================================================================================================================================
 
+Exercise: 113 (Serge I: 2003-12-24)
+How much paint of each color is needed to dye all squares white?
+Result set: amount of each paint in order (R,G,B).
+(Сколько каждой краски понадобится, чтобы докрасить все Не белые квадраты до белого цвета.
+Вывод: количество каждой краски в порядке (R,G,B))
 
-()
+WITH squaresColors AS (
+	SELECT b.B_Q_ID,
+		SUM(IIF(v.V_COLOR = 'R', B_VOL, 0)) R,
+		SUM(IIF(v.V_COLOR = 'G', B_VOL, 0)) G,
+		SUM(IIF(v.V_COLOR = 'B', B_VOL, 0)) B
+	FROM utB b, utV v
+	WHERE b.B_V_ID = v.V_ID
+	GROUP BY b.B_Q_ID
+),
+allSquares AS (
+	SELECT q.Q_ID AS id,
+ISNULL(s.R, 0) R,
+		ISNULL(s.G, 0) G, ISNULL(s.B, 0) B
+	FROM squaresColors s
+	RIGHT JOIN utQ q ON s.B_Q_ID = q.Q_ID
+)
 
-
+SELECT (COUNT(id) * 255 - SUM(R)) AS Red,
+	(COUNT(id) * 255 - SUM(G)) AS Green,
+	(COUNT(id) * 255 - SUM(B)) AS Blue
+FROM allSquares
 
 ===============================================================================================================================================
+
+Exercise: 114 (Serge I: 2003-04-08)
+Find the names of different passengers who occupied the same seat most often. Output: passenger name, number of flights in the same seat.
+(Определить имена разных пассажиров, которым чаще других доводилось лететь на одном и том же месте.
+Вывод: имя и количество полетов на одном и том же месте.)
+
+SELECT  ( SELECT name FROM Passenger ps
+	  WHERE ps.ID_psg = q.ID_psg
+	) name,
+	MAX(NN) AS NN
+FROM (
+	SELECT ID_psg, COUNT(*) NN, MAX(COUNT(*)) OVER() maxNN
+	FROM Pass_in_trip pt
+	GROUP BY ID_psg, place
+) q
+WHERE NN = maxNN
+GROUP BY ID_psg
+
+===============================================================================================================================================
+
+Exercise: 115 (Baser: 2013-11-01)
+Let’s consider isosceles trapezoids, each of them having an inscribed circle tangent to all four sides.
+Besides, each side has an integer length belonging to the set of b_vol values.
+Output the result in 4 columns named Up, Down, Side, Rad, where Up is the shorter base,
+Down - the longer base, Side is the length of the legs, and Rad - the radius of the inscribed circle (with 2 decimal places).
+(Рассмотрим равнобочные трапеции, в каждую из которых можно вписать касающуюся всех сторон окружность.
+Кроме того, каждая сторона имеет целочисленную длину из множества значений b_vol.
+Вывести результат в 4 колонки: Up, Down, Side, Rad. Здесь Up - меньшее основание,
+Down - большее основание, Side - длины боковых сторон, Rad – радиус вписанной окружности (с 2-мя знаками после запятой).)
+
+WITH cte AS (
+	SELECT CAST(B_VOL AS INT) B_VOL
+	FROM utB
+	GROUP BY B_VOL
+)
+
+SELECT  u.B_VOL AS Up, d.B_VOL AS Down, s.B_VOL AS Side,
+	Rad = CAST(SQRT(u.B_VOL * d.B_VOL * 1.0) / 2 AS DECIMAL(8,2))
+FROM  cte u, cte s, cte d
+WHERE u.B_VOL < s.B_VOL
+  AND s.B_VOL < d.B_VOL
+  AND u.B_VOL + d.B_VOL = s.B_VOL * 2
+
+===============================================================================================================================================
+
+Exercise: 116 (Velmont: 2013-11-19)
+Assuming a painting event lasts exactly one second determine all continuous time intervals in the utB table that are more than one second long.
+Output: date of the painting event that starts the respective interval, date of the painting event that ends it.
+(Считая, что каждая окраска длится ровно секунду, определить непрерывные интервалы времени с длительностью более 1 секунды из таблицы utB.
+Вывод: дата первой окраски в интервале, дата последней окраски в интервале.)
+
+WITH temp AS (
+	SELECT 	B_DATETIME AS time,
+		IIF(
+		    ISNULL(DATEDIFF(ss,
+				    LAG(B_DATETIME) OVER(ORDER BY B_DATETIME),
+				    B_DATETIME
+		    	   ),
+			   0
+		    ) <= 1,
+		    0,
+		    1
+		) AS x
+	FROM utB
+),
+rankedData AS (
+ 	SELECT time, SUM(x) OVER(ORDER BY time ROWS UNBOUNDED PRECEDING) rank
+	FROM temp
+)
+
+SELECT MIN(time) min, MAX(time) max
+FROM rankedData
+GROUP BY rank
+HAVING MIN(time) < MAX(time)
+
+===============================================================================================================================================
+
+Exercise: 117 (Serge I: 2013-11-29)
+For each country in the Classes table, determine the maximal value among the following three expressions:
+numguns*5000, bore*3000, displacement.
+The result set consists of 3 columns:
+- country;
+- maximal value;
+- the word "numguns" if numguns*5000 is the maximum, "bore" if it’s bore*3000, or "displacement" if it’s the displacement.
+Note. If the maximum occurs for more than one expression, display them all in a separate row each.
+(По таблице Classes для каждой страны найти максимальное значение среди трех выражений:
+numguns*5000, bore*3000, displacement.
+Вывод в три столбца:
+- страна;
+- максимальное значение;
+- слово `numguns` - если максимум достигается для numguns*5000, слово `bore` - если максимум достигается для bore*3000, слово `displacement` - если максимум достигается для displacement.
+Замечание. Если максимум достигается для нескольких выражений, выводить каждое из них отдельной строкой.)
+
+WITH rawData AS (
+	SELECT country, MAX(numGuns) * 5000 max, 'numguns' AS name
+	FROM Classes
+	GROUP BY country
+UNION ALL
+	SELECT country, MAX(bore) * 3000, 'bore'
+	FROM Classes
+	GROUP BY country
+UNION ALL
+	SELECT country, MAX(displacement), 'displacement'
+	FROM Classes
+	GROUP BY country
+),
+temp AS (
+	SELECT *, MAX(max) OVER(PARTITION BY country) max_val
+	FROM rawData
+)
+
+SELECT country, max_val, name
+FROM temp
+WHERE max = max_val
+
+===============================================================================================================================================
+
+Exercise: 118 (qwrqwr: 2013-12-11)
+The PFAS Museum Director elections are held in leap years only, on the first Tuesday after the first Monday in April.
+For each date from the Battles table, determine the closest election date following it.
+Output: battle name, date of battle, election date. Note: output format for dates should be "yyyy-mm-dd".
+(Выборы Директора музея ПФАН проводятся только в високосный год, в первый вторник апреля после первого понедельника апреля.
+Для каждой даты из таблицы Battles определить дату ближайших (после этой даты) выборов Директора музея ПФАН.
+Вывод: сражение, дата сражения, дата выборов. Даты выводить в формате "yyyy-mm-dd".)
+
+WITH rawData AS (
+	SELECT  b.name, b.date,
+		DATEADD(yy,
+			DATEPART(yy, b.date) - 1900 + Q.x,
+			0
+		) AS yearGen
+	FROM Battles b,
+	     (VALUES(0),(1),(2),(3),(4),(5),(6),(7),(8)) Q(x)
+),
+leapYears AS (
+	SELECT name, date, DATEADD(m, 3, yearGen) leapY
+	FROM  rawData
+	WHERE YEAR(yearGen) % 4 = 0
+	  AND YEAR(yearGen) % 100 <> 0
+	   OR YEAR(yearGen) % 400 = 0
+),
+leapApril AS (
+	SELECT  l.name, l.date,
+		DATEADD(dd, Q.x, l.leapY) AS ld
+	FROM  leapYears l,
+	     (VALUES(0),(1),(2),(3),(4),(5),(6)) Q(x)
+),
+result AS (
+	SELECT name, date, DATEADD(dd, 1, ld) AS genDate
+	FROM  leapApril
+	WHERE DATEPART(dw, ld) = DATEPART(dw,'20200601')
+)
+
+SELECT  name, FORMAT(date, 'yyyy-MM-dd') AS battle_dt,
+	FORMAT(MIN(genDate), 'yyyy-MM-dd') AS election_dt
+FROM result
+WHERE date < genDate
+GROUP BY name, date
+
+===============================================================================================================================================
+
+Exercise: 119 ($erges: 2008-04-25)
+Group all paintings by days, months and years separately.
+The group identifiers should be "yyyy" for years, "yyyy-mm" for months and "yyyy-mm-dd" for days.
+Displayed should be only groups with more than 10 distinct moments of time (b_datetime) at which paintings have occurred.
+Result set: group identifier, total quantity of paint used within a group.
+(Сгруппировать все окраски по дням, месяцам и годам.
+Идентификатор каждой группы должен иметь вид "yyyy" для года, "yyyy-mm" для месяца и "yyyy-mm-dd" для дня.
+Вывести только те группы, в которых количество различных моментов времени (b_datetime), когда выполнялась окраска, более 10.
+Вывод: идентификатор группы, суммарное количество потраченной краски.)
+
+WITH datesData AS (
+	SELECT  B_DATETIME time,
+		YEAR(B_DATETIME) year,
+		MONTH(B_DATETIME) month,
+		DAY(B_DATETIME) day,
+		B_VOL
+	FROM utB
+)
+
+SELECT  CONCAT( year, IIF(month < 10, '-0', '-'),
+			month, IIF(day < 10, '-0', '-'),
+			day
+		) AS period,
+		SUM(B_VOL) vol
+	FROM datesData
+	GROUP BY year, month, day
+	HAVING COUNT(DISTINCT time) > 10
+UNION ALL
+	SELECT  CONCAT( year, IIF(month < 10, '-0', '-'),
+			month
+		) AS period,
+		SUM(B_VOL) vol
+	FROM datesData
+	GROUP BY year, month
+	HAVING COUNT(DISTINCT time) > 10
+UNION ALL
+	SELECT CONCAT(year, NULL), SUM(B_VOL) vol
+	FROM datesData
+	GROUP BY year
+	HAVING COUNT(DISTINCT time) > 10
+
+========================================================================================================================================================================================
+
+Exercise: 120 (mslava: 2004-01-05)
+For each airline that has transported at least one passenger, calculate the arithmetic, geometric, quadratic and harmonic means of its respective planes’ flight durations (in minutes)
+with an accuracy of two decimal places. In addition, output the aforementioned characteristics for all flights in a separate line, using the word ‘TOTAL’ as the airline name.
+Result set: company name, arithmetic mean {(x1 + x2 + … + xN)/N}, geometric mean {(x1 * x2 * … * xN)^(1/N)}, quadratic mean { sqrt((x1^2 + x2^2 + ... + xN^2)/N)}, harmonic mean {N/(1/x1 + 1/x2 + ... + 1/xN)}.
+(Для каждой авиакомпании, самолеты которой перевезли хотя бы одного пассажира, вычислить с точностью до двух десятичных знаков средние величины времени нахождения самолетов в воздухе (в минутах).
+Также рассчитать указанные характеристики по всем летавшим самолетам (использовать слово 'TOTAL').
+Вывод: компания, среднее арифметическое, среднее геометрическое, среднее квадратичное, среднее гармоническое.
+Для справки:
+среднее арифметическое = (x1 + x2 + ... + xN)/N
+среднее геометрическое = (x1 * x2 * ... * xN)^(1/N)
+среднее квадратичное = sqrt((x1^2 + x2^2 + ... + xN^2)/N)
+среднее гармоническое = N/(1/x1 + 1/x2 + ... + 1/xN))
+
+WITH flightsDuration AS (
+	SELECT 	t.id_comp,
+		DATEDIFF(mi, t.time_out,
+			 IIF(   t.time_in <= t.time_out,
+				DATEADD(dd, 1, t.time_in),
+				t.time_in
+			 )
+		) dur
+	FROM Trip t, 
+	     (	SELECT trip_no, date
+		FROM Pass_in_trip
+		GROUP BY trip_no, date
+	     ) p
+	WHERE t.trip_no = p.trip_no
+)
+
+SELECT 	COALESCE( ( SELECT name FROM Company c
+		    WHERE f.id_comp = c.ID_comp
+		  ),
+		  'TOTAL'
+	) AS company,
+	CAST( AVG(dur * 1.0) AS NUMERIC(8, 2) ) AS A_Mean,
+	CAST(	EXP(AVG(LOG(dur * 1.0)))
+		AS NUMERIC(8, 2)
+	) AS G_Mean,
+	CAST(
+		SQRT(AVG(dur * dur)) AS NUMERIC(8, 2)
+	) AS Q_Mean,
+	CAST(
+		COUNT(dur) * 1.0 / SUM(1.0 / dur) AS NUMERIC(8, 2)
+	) AS H_Mean
+FROM flightsDuration f
+GROUP BY ROLLUP(id_comp)
+
+========================================================================================================================================================================================
