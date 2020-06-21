@@ -1,0 +1,192 @@
+﻿
+Exercise: 121 (Serge I: 2005-05-23)
+Get the names of all ships in the database that definitely were launched before 1941.
+(Найдите названия всех тех кораблей из базы данных, о которых можно определенно сказать, что они были спущены на воду до 1941 г.)
+
+SELECT name 
+FROM Ships 
+WHERE launched < 1941
+ 
+UNION 
+
+SELECT ship 
+FROM Outcomes JOIN 
+ Battles ON Battles.name = Outcomes.battle 
+WHERE date < '19410101'
+ 
+UNION 
+
+SELECT ship 
+FROM Outcomes 
+WHERE ship IN (SELECT class 
+ FROM Ships
+ WHERE launched < 1941
+ )
+ 
+UNION 
+
+SELECT name
+FROM Ships
+WHERE name IN (SELECT class 
+ FROM Ships
+ WHERE launched < 1941
+ )
+ 
+UNION 
+
+SELECT ship 
+FROM Outcomes 
+WHERE Ship IN (	SELECT class 
+		FROM Ships JOIN
+		Outcomes ON Ships.name = Outcomes.ship JOIN 
+		Battles ON Battles.name = Outcomes.battle 
+		WHERE date < '19410101'
+	      )
+ 
+UNION 
+
+SELECT name
+FROM Ships
+WHERE name IN (	SELECT class 
+		FROM Ships JOIN
+		Outcomes ON Ships.name = Outcomes.ship JOIN 
+		Battles ON Battles.name = Outcomes.battle 
+		WHERE date < '19410101'
+	      )
+
+===============================================================================================================================================
+
+Exercise: 122 (Serge I: 2003-08-28)
+Assuming the first town a passenger departs from is his/her residence, find out the passengers who are away from home.
+Result set: passenger name, town of residence.
+(Считая, что первый пункт вылета является местом жительства, найти пассажиров, которые находятся вне дома.
+Вывод: имя пассажира, город проживания.)
+
+WITH Trips AS (
+	SELECT  ID_psg, p.date, time_out, town_from, town_to,
+		ROW_NUMBER()
+		OVER(PARTITION BY ID_psg
+		     ORDER BY date, time_out) AS rnAsc,
+		ROW_NUMBER()
+		OVER(PARTITION BY ID_psg
+		     ORDER BY date DESC, time_out DESC) AS rnDesc
+	FROM Trip t, Pass_in_trip p
+	WHERE t.trip_no = p.trip_no
+),
+Residences AS (
+	SELECT ID_psg, town_from AS town
+	FROM Trips
+	WHERE rnAsc = 1
+),
+CurrentPlace AS (
+	SELECT ID_psg, town_to AS currPlace
+	FROM Trips
+	WHERE rnDesc = 1
+)
+
+SELECT (SELECT name FROM Passenger p WHERE p.ID_psg = r.ID_psg) AS name, r.town
+FROM Residences r, CurrentPlace cp
+WHERE r.ID_psg = cp.ID_psg
+  AND r.town != cp.currPlace
+
+===============================================================================================================================================
+
+Exercise: 123 (qwrqwr: 2014-11-07)
+For each maker find out the number of available products (of any type) with a non-unique price and the number of such non-unique prices.
+Result set: maker, number of products, number of prices.
+(Для каждого производителя подсчитать: сколько имеется в наличии его продуктов (любого типа) с неуникальной для этого
+производителя ценой и количество таких неуникальных цен.
+Вывод: производитель, количество продуктов, количество цен.)
+
+WITH AllProducts AS (
+	SELECT p.maker, p.model, code, price
+	FROM PC pc, Product p
+	WHERE pc.model = p.model
+UNION ALL
+	SELECT p.maker, p.model, code, price
+	FROM Laptop l, Product p
+	WHERE l.model = p.model
+UNION ALL
+	SELECT p.maker, p.model, code, price
+	FROM Printer pr, Product p
+	WHERE pr.model = p.model
+),
+nonUniqPrices AS (
+	SELECT p.maker, a.price
+	FROM AllProducts a, Product p
+	WHERE p.model = a.model
+	GROUP BY p.maker, a.price
+	HAVING COUNT(a.price) > 1
+)
+
+SELECT p.maker, COUNT(code) AS cou, COUNT(DISTINCT n.price) AS cou2
+FROM (SELECT DISTINCT maker FROM Product) p
+LEFT JOIN nonUniqPrices n ON p.maker = n.maker
+LEFT JOIN AllProducts a ON a.maker = p.maker
+			AND a.price = n.price
+GROUP BY p.maker
+
+===============================================================================================================================================
+
+Exercise: 124 (DimaN: 2004-03-01)
+Among the passengers who flew with at least two airlines find those who traveled the same number of times with each of these airlines.
+Display the names of such passengers.
+(Среди пассажиров, которые пользовались услугами не менее двух авиакомпаний, найти тех,
+кто совершил одинаковое количество полётов самолетами каждой из этих авиакомпаний.
+Вывести имена таких пассажиров.)
+
+WITH passInfo AS (
+	SELECT pt.ID_psg AS psg, t.id_comp AS comp, COUNT(*) AS count
+	FROM Trip t, Pass_in_trip pt
+	WHERE t.trip_no = pt.trip_no
+	GROUP BY pt.ID_psg, t.id_comp
+)
+
+SELECT (SELECT p.name FROM Passenger p
+	WHERE pi.psg = p.ID_psg) AS name
+FROM passInfo pi 
+GROUP BY psg
+HAVING COUNT(comp) > 1
+   AND MIN(count) = MAX(count)
+
+===============================================================================================================================================
+
+Exercise: 126 (Serge I: 2015-04-17)
+For the sequence of passengers ordered by id_psg find out the ones having the maximum number of flight bookings,
+as well as the ones directly preceding and following them in the sequence.
+The first passenger in the sequence is preceded by the last one, and the last passenger is followed by the first one.
+For each passenger meeting the aforementioned criterion, display his/her name, the name of the previous passenger,
+and the name of the next passenger.
+(Для последовательности пассажиров, упорядоченных по id_psg, определить того,
+кто совершил наибольшее число полетов, а также тех, кто находится в последовательности непосредственно перед и после него.
+Для первого пассажира в последовательности предыдущим будет последний, а для последнего пассажира последующим будет первый.
+Для каждого пассажира, отвечающего условию, вывести: имя, имя предыдущего пассажира, имя следующего пассажира.)
+
+WITH psgInfo AS (
+	SELECT  ID_psg, COUNT(trip_no) AS flights,
+		MAX(COUNT(trip_no)) OVER() AS max
+	FROM Pass_in_trip
+	GROUP BY ID_psg
+),
+neededOrder AS (
+	SELECT  ID_psg, name,
+		ISNULL( LAG(name) OVER(ORDER BY ID_psg),
+			(SELECT TOP 1 name FROM Passenger
+			 ORDER BY ID_psg DESC
+			)
+		) AS prev,
+		ISNULL( LEAD(name) OVER(ORDER BY ID_psg),
+			(SELECT TOP 1 name FROM Passenger
+			 ORDER BY ID_psg
+			)
+		) AS next
+	FROM Passenger
+)
+
+SELECT name, prev, next
+FROM neededOrder
+WHERE ID_psg IN (SELECT ID_psg FROM psgInfo
+	  	 WHERE flights = max
+		 )
+
+===============================================================================================================================================
