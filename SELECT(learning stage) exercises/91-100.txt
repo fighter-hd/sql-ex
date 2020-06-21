@@ -1,70 +1,306 @@
 ﻿
+Exercise: 91 (Serge I: 2015-03-20)
+Determine the average quantity of paint per square with an accuracy of two decimal places.
+(C точностью до двух десятичных знаков определить среднее количество краски на квадрате.)
 
-()
+WITH allInfo AS (
+	SELECT u.Q_ID, COALESCE(B_VOL, 0) B_VOL
+	FROM utQ u
+	LEFT JOIN utB b ON u.Q_ID = b.B_Q_ID
+),
+eachSqrPaint AS (
+	SELECT Q_ID, SUM(B_VOL) paintVol
+	FROM allInfo
+	GROUP BY Q_ID
+)
 
-
-
-===============================================================================================================================================
-
-
-()
-
-
-
-===============================================================================================================================================
-
-
-()
-
-
-
-===============================================================================================================================================
-
-
-()
-
-
+SELECT CAST( AVG(paintVol * 1.0) AS NUMERIC (5,2) ) avg_paint
+FROM eachSqrPaint
 
 ===============================================================================================================================================
 
+Exercise: 92 (ZrenBy: 2003-09-01)
+Get all white squares that have been painted only with spray cans empty at present.
+Output the square names.
+(Выбрать все белые квадраты, которые окрашивались только из баллончиков,
+пустых к настоящему времени. Вывести имя квадрата.)
 
-()
+WITH emptyBal AS (
+	SELECT B_V_ID
+	FROM utB
+	GROUP BY B_V_ID
+	HAVING SUM(B_VOL) = 255
+),
+balTotal AS (
+	SELECT B_Q_ID, B_V_ID, SUM(B_VOL) balSum
+	FROM utB
+	GROUP BY B_Q_ID, B_V_ID
+),
+sqrVol AS (
+	SELECT B_Q_ID, SUM(balSum) sqrSum
+	FROM balTotal
+	WHERE B_V_ID IN (SELECT * FROM emptyBal)
+	GROUP BY B_Q_ID
+)
 
-
-
-===============================================================================================================================================
-
-
-()
-
-
-
-===============================================================================================================================================
-
-
-()
-
-
-
-===============================================================================================================================================
-
-
-()
-
-
-
-===============================================================================================================================================
-
-
-()
-
-
+SELECT (SELECT Q_NAME FROM utQ WHERE Q_ID = B_Q_ID) Q_NAME 
+FROM sqrVol
+WHERE sqrSum = (255 * 3)
 
 ===============================================================================================================================================
 
+Exercise: 93 (Serge I: 2003-06-05)
+For each airline that transported passengers calculate the total flight duration of its planes.
+Result set: company name, duration in minutes.
+(Для каждой компании, перевозившей пассажиров, подсчитать время, которое провели в полете самолеты с пассажирами.
+Вывод: название компании, время в минутах.)
 
-()
+WITH neededInfo AS (
+SELECT t.ID_comp,
+	DATEDIFF(mi, time_out, 
+		 IIF(time_out > time_in, time_in + 1, time_in)
+		) dur
+FROM Trip t, (
+		SELECT DISTINCT trip_no, date
+		FROM Pass_in_trip p
+	     ) p
+WHERE t.trip_no = p.trip_no
+)
 
+SELECT (SELECT name FROM Company c WHERE c.ID_comp = ni.ID_comp) company,
+	SUM(dur) minutes
+FROM neededInfo ni
+GROUP BY ID_comp
 
+===============================================================================================================================================
+
+Exercise: 94 (Serge I: 2003-04-09)
+For seven successive days starting with the earliest date when the number of departures from Rostov was maximal, get the number of flights departed from Rostov.
+Result set: date, number of flights.
+(Для семи последовательных дней, начиная от минимальной даты, когда из Ростова было совершено максимальное число рейсов, определить число рейсов из Ростова.
+Вывод: дата, количество рейсов.)
+
+WITH flightsNum AS (
+	SELECT date, COUNT(DISTINCT p.trip_no) Qty,
+		MAX(COUNT(DISTINCT p.trip_no)) OVER() maxQty
+	FROM Pass_in_trip p, Trip t
+	WHERE t.town_from = 'Rostov'
+	  AND p.trip_no = t.trip_no
+	GROUP BY date
+),
+dateSeque (date, n) AS (
+	SELECT TOP 1 date, n = 1 FROM flightsNum
+	WHERE Qty = maxQty
+	ORDER BY date
+   UNION ALL
+	SELECT date + 1, n + 1 FROM dateSeque WHERE n < 7
+)
+
+SELECT ds.date, COALESCE(f.Qty, 0) Qty
+FROM dateSeque ds
+LEFT JOIN flightsNum f ON ds.date = f.date
+
+===============================================================================================================================================
+
+Exercise: 95 (qwrqwr: 2013-02-08)
+Using the Pass_in_Trip table, calculate for each airline:
+1) the number of performed flights;
+2) the number of plane types used;
+3) the number of different passengers that have been transported;
+4) the total number of passengers that have been transported by the company.
+Output: airline name, 1), 2), 3), 4).
+(На основании информации из таблицы Pass_in_Trip, для каждой авиакомпании определить:
+1) количество выполненных перелетов;
+2) число использованных типов самолетов;
+3) количество перевезенных различных пассажиров;
+4) общее число перевезенных компанией пассажиров.
+Вывод: Название компании, 1), 2), 3), 4).)
+
+WITH x AS(
+SELECT id_comp,
+	ROW_NUMBER() OVER(PARTITION BY id_comp, date, t.trip_no ORDER BY date) AS fl,
+	ROW_NUMBER() OVER(PARTITION BY id_comp, plane ORDER BY plane) AS pl,
+	ROW_NUMBER() OVER(PARTITION BY id_comp, id_psg ORDER BY id_psg) AS dp 
+FROM Pass_in_trip pit
+JOIN Trip t ON pit.trip_no = t.trip_no)
+
+SELECT (SELECT name FROM Company WHERE id_comp = x.id_comp) AS company,
+	SUM(CASE WHEN fl = 1 THEN 1 ELSE 0 END) AS fl,
+	SUM(CASE WHEN pl = 1 THEN 1 ELSE 0 END) AS pl,
+	SUM(CASE WHEN dp = 1 THEN 1 ELSE 0 END) AS dp,
+	COUNT(dp) AS p 
+FROM x
+GROUP BY id_comp
+
+===============================================================================================================================================
+
+Exercise: 96 (ZrenBy: 2003-09-01)
+Considering only red spray cans used more than once, get those that painted squares currently having a non-zero blue component.
+Result set: spray can name.
+(При условии, что баллончики с красной краской использовались более одного раза, выбрать из них такие, которыми окрашены квадраты,
+имеющие голубую компоненту.
+Вывести название баллончика)
+
+WITH twiceUsedRedBal AS (
+	SELECT V_NAME, B_Q_ID q_id
+	FROM utV, utB
+	WHERE V_COLOR = 'R'
+	  AND V_ID IN (	
+			SELECT B_V_ID
+			FROM utB
+			GROUP BY B_V_ID
+			HAVING COUNT(*) > 1
+		      )
+	  AND V_ID = B_V_ID
+),
+bluePaintSqr AS (
+	SELECT B_Q_ID q_id
+	FROM utB b, utV v
+	WHERE v.V_COLOR = 'B'
+	  AND v.V_ID = b.B_V_ID
+)
+
+SELECT DISTINCT t.V_NAME
+FROM bluePaintSqr b, twiceUsedRedBal t
+WHERE b.q_id = t.q_id
+
+===============================================================================================================================================
+
+Exercise: 97 (qwrqwr: 2013-02-15)
+From the Laptop table, select rows fulfilling the following condition:
+the values of the speed, ram, price, and screen columns can be arranged in such a way that each successive value exceeds two or more times the previous one.
+Note: all known laptop characteristics are greater than zero.
+Output: code, speed, ram, price, screen.
+(Отобрать из таблицы Laptop те строки, для которых выполняется следующее условие:
+значения из столбцов speed, ram, price, screen возможно расположить таким образом, что каждое последующее значение будет превосходить предыдущее в 2 раза или более.
+Замечание: все известные характеристики ноутбуков больше нуля.
+Вывод: code, speed, ram, price, screen.)
+
+WITH unpiv AS (
+	SELECT code, spec, data,
+		ROW_NUMBER() OVER(PARTITION BY code ORDER BY data) num
+	FROM (
+		SELECT code, CAST(speed AS REAL) speed,
+			CAST(ram AS REAL) ram,
+			CAST(price AS REAL) price,
+			CAST(screen AS REAL) screen
+		FROM Laptop
+	) l
+	UNPIVOT (
+		data FOR spec IN (speed, ram, price, screen)
+	) unp
+),
+reqCodes AS (
+	SELECT f.code
+	FROM unpiv f, unpiv s
+	WHERE f.code = s.code
+	  AND f.num < 4 AND f.num + 1 = s.num AND f.data * 2 <= s.data
+	GROUP BY f.code
+	HAVING COUNT(*) = 3
+)
+
+SELECT code, speed, ram, price, screen
+FROM Laptop
+WHERE code IN (SELECT * FROM reqCodes)
+
+===============================================================================================================================================
+
+Exercise: 98 (qwrqwr: 2010-04-26)
+Display the list of PCs, for each of which the result of the bitwise OR operation performed on the binary representations of its respective processor speed
+and RAM capacity contains a sequence of at least four consecutive bits set to 1.
+Result set: PC code, processor speed, RAM capacity.
+(Вывести список ПК, для каждого из которых результат побитовой операции ИЛИ, примененной к двоичным представлениям скорости процессора
+и объема памяти, содержит последовательность из не менее четырех идущих подряд единичных битов.
+Вывод: код модели, скорость процессора, объем памяти.)
+
+WITH binAndCode AS (
+	SELECT code, (speed | ram) binOR
+	FROM PC
+),
+Binary as (
+	SELECT code, binOR,
+		CAST(binOR as INT) as wlvl,
+		CAST('' as VARCHAR(MAX)) as binval
+	FROM binAndCode
+UNION ALL
+	SELECT code, binOR, b.wlvl / 2,
+		CAST(b.wlvl % 2 as VARCHAR(32)) + b.binval
+	FROM Binary b
+	WHERE b.wlvl > 0
+),
+neededPC AS (
+	SELECT *
+	FROM Binary
+	WHERE wlvl = 0
+	  AND binval LIKE '%1111%'
+)
+
+SELECT pc.code, speed, ram
+FROM PC pc, neededPC n
+WHERE pc.code = n.code
+
+===============================================================================================================================================
+
+Exercise: 99 (qwrqwr: 2013-03-01)
+Only Income_o and Outcome_o tables are considered. It is known that no money transactions are performed on Sundays.
+For each buy-back center (point) and each funds receipt date, determine the encashment date according to the following rules:
+1. The encashment date is the same as the receipt date if there is no payment entry in the Outcome_o table for this date and point.
+2. Otherwise, the first possible date after the receipt date is used that doesn’t fall on Sunday and doesn’t have a corresponding payment entry
+in the Outcome_o table for the point in question.
+Output: point, receipt date, encashment date.
+(Рассматриваются только таблицы Income_o и Outcome_o. Известно, что прихода/расхода денег в воскресенье не бывает.
+Для каждой даты прихода денег на каждом из пунктов определить дату инкассации по следующим правилам:
+1. Дата инкассации совпадает с датой прихода, если в таблице Outcome_o нет записи о выдаче денег в эту дату на этом пункте.
+2. В противном случае - первая возможная дата после даты прихода денег, которая не является воскресеньем и в Outcome_o не отмечена
+выдача денег сдатчикам вторсырья в эту дату на этом пункте.
+Вывод: пункт, дата прихода денег, дата инкассации.)
+
+WITH Query AS (
+	SELECT point, date, date nextDay
+	FROM Income_o i
+UNION ALL
+	SELECT point, date, nextDay + 1
+	FROM Query q
+	WHERE nextDay IN (SELECT date
+			  FROM Outcome_o
+			  WHERE point = q.point
+			 )
+	   OR DATEPART(dw, nextDay) = 1
+),
+maxDays AS (
+	SELECT point, date, MAX(nextDay) AS maxDay
+	FROM Query
+	GROUP BY point, date
+)
+
+SELECT point, date AS DP,
+	IIF(date = maxDay, date, maxDay) AS DI
+FROM maxDays
+
+===============================================================================================================================================
+
+Exercise: 100 ($erges: 2009-06-05)
+Write a query that displays all operations from the Income and Outcome tables as follows:
+date, sequential record number for this date, buy-back center receiving funds, funds received, buy-back center making a payment, payment amount.
+All revenue transactions for all centers made during a single day are ordered by the code field, and so are all expense transactions.
+If the numbers of revenue and expense transactions are different for a day, display NULL in the corresponding columns for missing operations.
+(Написать запрос, который выводит все операции прихода и расхода из таблиц Income и Outcome в следующем виде:
+дата, порядковый номер записи за эту дату, пункт прихода, сумма прихода, пункт расхода, сумма расхода.
+При этом все операции прихода по всем пунктам, совершённые в течение одного дня, упорядочены по полю code, и так же все операции
+расхода упорядочены по полю code. В случае, если операций прихода/расхода за один день было не равное количество, выводить NULL
+в соответствующих колонках на месте недостающих операций.)
+
+WITH O AS (
+	SELECT ROW_NUMBER()OVER(PARTITION BY Date ORDER BY Code) rg, *
+        FROM Outcome
+),
+I AS (
+	SELECT ROW_NUMBER()OVER(PARTITION BY Date ORDER BY Code) rg, *
+        FROM Income
+)
+
+SELECT COALESCE(I.date, O.date) date, COALESCE(I.rg, O.rg) srn, i.point,
+	inc, o.point, out
+FROM I FULL JOIN O ON I.date = O.date AND I.rg = O.rg
 
 ===============================================================================================================================================
