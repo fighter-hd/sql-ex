@@ -1,70 +1,240 @@
 ﻿
+Exercise: 81 (Serge I: 2011-11-25)
+For each month-year combination with the maximum sum of payments (out), retrieve all records from the Outcome table.
+(Из таблицы Outcome получить все записи за тот месяц (месяцы), с учетом года, в котором суммарное значение расхода (out) было максимальным.)
 
-()
+WITH neededMonth AS (
+	SELECT TOP 1 WITH TIES 
+			YEAR(date) year,
+			MONTH(date) month,
+			SUM(out) total_out
+	FROM Outcome
+	GROUP BY YEAR(date), MONTH(date)
+	ORDER BY total_out DESC
+)
 
-
-
-===============================================================================================================================================
-
-
-()
-
-
-
-===============================================================================================================================================
-
-
-()
-
-
-
-===============================================================================================================================================
-
-
-()
-
-
+SELECT o.*
+FROM Outcome o
+JOIN neededMonth n
+  ON YEAR(o.date) = n.year
+  AND MONTH(o.date) = n.month
 
 ===============================================================================================================================================
 
+Exercise: 82 (Serge I: 2011-10-08)
+Assuming the PC table is sorted by code in ascending order, find the average price for each group of six consecutive personal computers.
+Result set: the first code value in a set of six records, average price for the respective set.
+(В наборе записей из таблицы PC, отсортированном по столбцу code (по возрастанию) найти среднее значение цены для каждой шестерки подряд идущих ПК.
+Вывод: значение code, которое является первым в наборе из шести строк, среднее значение цены в наборе.)
 
-()
+WITH data AS (
+	SELECT code, price, ROW_NUMBER() OVER (ORDER BY code) rowNum
+	FROM PC
+)
 
-
-
-===============================================================================================================================================
-
-
-()
-
-
-
-===============================================================================================================================================
-
-
-()
-
-
-
-===============================================================================================================================================
-
-
-()
-
-
+SELECT d1.code, AVG(d2.price) avgprc
+FROM data d1, (
+		SELECT *, MAX(rowNum) OVER() maxRowNum
+		FROM data
+	      ) d2
+WHERE d1.rowNum + 5 >= d2.rowNum AND d1.rowNum <= d2.rowNum
+  AND d1.rowNum <= d2.maxRowNum - 5
+GROUP BY d1.code
 
 ===============================================================================================================================================
 
+Find out the names of the ships in the Ships table that meet at least four criteria from the following list:
+numGuns = 8,
+bore = 15,
+displacement = 32000,
+type = bb,
+launched = 1915,
+class = Kongo,
+country = USA.
+(Определить названия всех кораблей из таблицы Ships, которые удовлетворяют, по крайней мере, комбинации любых четырёх критериев из следующего списка:
+numGuns = 8
+bore = 15
+displacement = 32000
+type = bb
+launched = 1915
+class=Kongo
+country=USA)
 
-()
-
-
+SELECT name
+FROM Ships s, Classes c
+WHERE s.class = c.class
+  AND   CASE WHEN c.numGuns = 8 THEN 1 ELSE 0 END +
+	CASE WHEN c.bore = 15 THEN 1 ELSE 0 END +
+	CASE WHEN c.displacement = 32000 THEN 1 ELSE 0 END +
+	CASE WHEN c.type = 'bb' THEN 1 ELSE 0 END +
+	CASE WHEN s.launched = 1915 THEN 1 ELSE 0 END +
+	CASE WHEN s.class = 'Kongo' THEN 1 ELSE 0 END +
+	CASE WHEN c.country = 'USA' THEN 1 ELSE 0 END >= 4
 
 ===============================================================================================================================================
 
+Exercise: 84 (Serge I: 2003-06-05)
+For each airline, calculate the number of passengers carried in April 2003 (if there were any) by ten-day periods. Consider only flights that departed that month.
+Result set: company name, number of passengers carried for each ten-day period.
+(Для каждой компании подсчитать количество перевезенных пассажиров (если они были в этом месяце) по декадам апреля 2003.
+При этом учитывать только дату вылета.
+Вывод: название компании, количество пассажиров за каждую декаду.)
 
-()
+SELECT c.name,
+	SUM(CASE WHEN DAY(p.date) BETWEEN 1 AND 10
+		 THEN 1 ELSE 0 END
+	) '1-10',
+	SUM(CASE WHEN DAY(p.date) BETWEEN 11 AND 20
+		 THEN 1 ELSE 0 END
+	) '11-21',
+	SUM(CASE WHEN DAY(p.date) BETWEEN 21 AND 30
+		 THEN 1 ELSE 0 END
+	) '21-30'
+FROM Company c, Trip t, Pass_in_trip p
+WHERE c.ID_comp = t.ID_comp AND t.trip_no = p.trip_no
+  AND YEAR(p.date) = 2003 AND MONTH(p.date) = 4
+GROUP BY c.name
+
+===============================================================================================================================================
+
+Exercise: 85 (Serge I: 2012-03-16)
+Get makers producing either printers only or personal computers only; in case of PC manufacturers they should produce at least 3 models.
+(Найти производителей, которые выпускают только принтеры или только PC.
+При этом искомые производители PC должны выпускать не менее 3 моделей.)
+
+WITH q AS (
+	SELECT maker, type, COUNT(model) modelsNum
+	FROM Product
+	GROUP BY maker, type
+)
+
+SELECT maker
+FROM q
+WHERE type = 'Printer' OR (type = 'PC' AND modelsNum >= 3)
+
+EXCEPT
+
+SELECT maker
+FROM q
+WHERE type = 'Laptop'
+
+EXCEPT
+
+SELECT maker
+FROM q
+GROUP BY maker
+HAVING COUNT(type) > 1
+
+===============================================================================================================================================
+
+Exercise: 86 (Serge I: 2012-04-20)
+For each maker, list the types of products he produces in alphabetic order, using a slash ("/") as a delimiter.
+Result set: maker, list of product types.
+(Для каждого производителя перечислить в алфавитном порядке с разделителем "/" все типы выпускаемой им продукции.
+Вывод: maker, список типов продукции)
+
+SELECT maker, STRING_AGG(type, '/') WITHIN GROUP (ORDER BY type) types
+FROM (
+	SELECT DISTINCT maker, type FROM Product
+) p
+GROUP BY maker
+
+===============================================================================================================================================
+
+Exercise: 87 (Serge I: 2003-08-28)
+Supposing a passenger lives in the town his first flight departs from, find non-Muscovites who have visited Moscow more than once.
+Result set: passenger's name, number of visits to Moscow.
+(Считая, что пункт самого первого вылета пассажира является местом жительства, найти не москвичей, которые прилетали в Москву более одного раза.
+Вывод: имя пассажира, количество полетов в Москву.)
+
+WITH flights AS (
+	SELECT p.ID_psg,
+		p.date, MIN(p.date) OVER(PARTITION BY p.ID_psg) firstDate,
+		t.time_out,
+		MIN(t.time_out) OVER(PARTITION BY p.ID_psg, p.date) firstTime,
+		t.town_from
+	FROM Trip t, Pass_in_trip p
+	WHERE t.trip_no = p.trip_no
+),
+non_Musc AS (
+	SELECT ID_psg
+	FROM flights
+	WHERE date = firstDate AND time_out = firstTime
+	  AND town_from <> 'Moscow'
+)
+
+SELECT (SELECT name FROM Passenger ps WHERE ps.ID_psg = p.ID_psg) name,
+	COUNT(*) Qty
+FROM Trip t, Pass_in_trip p
+WHERE t.town_to = 'Moscow'
+  AND p.ID_psg IN (SELECT * FROM non_Musc)
+  AND t.trip_no = p.trip_no
+GROUP BY p.ID_psg
+HAVING COUNT(*) > 1
+
+===============================================================================================================================================
+
+Exercise: 88 (Serge I: 2003-04-29)
+Among those flying with a single airline find the names of different passengers who have flown most often.
+Result set: passenger name, number of trips, and airline name.
+(Среди тех, кто пользуется услугами только одной компании, определить имена разных пассажиров, летавших чаще других.
+Вывести: имя пассажира, число полетов и название компании.)
+
+WITH singAirl AS (
+	SELECT p.ID_psg, COUNT(t.id_comp) flightsNum,
+		MAX(COUNT(t.id_comp)) OVER() maxFlNum,
+		MIN(t.id_comp) compID
+	FROM Trip t, Pass_in_trip p
+	WHERE t.trip_no = p.trip_no
+	GROUP BY p.ID_psg
+	HAVING MIN(t.ID_comp) = MAX(t.ID_comp)
+),
+maxFlightCount AS (
+	SELECT ID_psg, flightsNum , compID
+	FROM singAirl
+	WHERE flightsNum = maxFlNum
+)
+
+SELECT (SELECT name FROM Passenger p WHERE p.ID_psg = m.ID_psg) name,
+	flightsNum AS trip_Qty,
+	(SELECT name FROM Company c WHERE c.ID_comp = m.compID) Company
+FROM maxFlightCount m
+
+===============================================================================================================================================
+
+Exercise: 89 (Serge I: 2012-05-04)
+Get makers having most models in the Product table, as well as those having least.
+Output: maker, number of models.
+(Найти производителей, у которых больше всего моделей в таблице Product, а также тех, у которых меньше всего моделей.
+Вывод: maker, число моделей)
+
+WITH a AS (
+	SELECT maker, COUNT(model) qty
+	FROM Product
+	GROUP BY maker
+),
+b AS (
+	SELECT maker, qty, MIN(qty) OVER() minQ, MAX(qty) OVER() maxQ
+	FROM a
+)
 
 
+SELECT maker, qty
+FROM b
+WHERE qty = minQ OR qty = maxQ
+
+===============================================================================================================================================
+
+Exercise: 90 (Serge I: 2012-05-04)
+Display all records from the Product table except for three rows with the smallest model numbers and three ones with the greatest model numbers.
+(Вывести все строки из таблицы Product, кроме трех строк с наименьшими номерами моделей и трех строк с наибольшими номерами моделей.)
+
+SELECT maker, model, type
+FROM (
+	SELECT *, ROW_NUMBER() OVER(ORDER BY model) row,
+		COUNT(model) OVER() modelsNum
+	FROM Product
+     ) q
+WHERE row BETWEEN 4 AND modelsNum - 3
 
 ===============================================================================================================================================
