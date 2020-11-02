@@ -1,0 +1,335 @@
+﻿
+Exercise: 121 (Serge I: 2005-05-23)
+Get the names of all ships in the database that definitely were launched before 1941.
+(Найдите названия всех тех кораблей из базы данных, о которых можно определенно сказать, что они были спущены на воду до 1941 г.)
+
+SELECT name 
+FROM Ships 
+WHERE launched < 1941
+ 
+UNION 
+
+SELECT ship 
+FROM Outcomes JOIN 
+ Battles ON Battles.name = Outcomes.battle 
+WHERE date < '19410101'
+ 
+UNION 
+
+SELECT ship 
+FROM Outcomes 
+WHERE ship IN (SELECT class 
+ FROM Ships
+ WHERE launched < 1941
+ )
+ 
+UNION 
+
+SELECT name
+FROM Ships
+WHERE name IN (SELECT class 
+ FROM Ships
+ WHERE launched < 1941
+ )
+ 
+UNION 
+
+SELECT ship 
+FROM Outcomes 
+WHERE Ship IN (	SELECT class 
+		FROM Ships JOIN
+		Outcomes ON Ships.name = Outcomes.ship JOIN 
+		Battles ON Battles.name = Outcomes.battle 
+		WHERE date < '19410101'
+	      )
+ 
+UNION 
+
+SELECT name
+FROM Ships
+WHERE name IN (	SELECT class 
+		FROM Ships JOIN
+		Outcomes ON Ships.name = Outcomes.ship JOIN 
+		Battles ON Battles.name = Outcomes.battle 
+		WHERE date < '19410101'
+	      )
+
+===============================================================================================================================================
+
+Exercise: 122 (Serge I: 2003-08-28)
+Assuming the first town a passenger departs from is his/her residence, find out the passengers who are away from home.
+Result set: passenger name, town of residence.
+(Считая, что первый пункт вылета является местом жительства, найти пассажиров, которые находятся вне дома.
+Вывод: имя пассажира, город проживания.)
+
+WITH Trips AS (
+	SELECT  ID_psg, p.date, time_out, town_from, town_to,
+		ROW_NUMBER()
+		OVER(PARTITION BY ID_psg
+		     ORDER BY date, time_out) AS rnAsc,
+		ROW_NUMBER()
+		OVER(PARTITION BY ID_psg
+		     ORDER BY date DESC, time_out DESC) AS rnDesc
+	FROM Trip t, Pass_in_trip p
+	WHERE t.trip_no = p.trip_no
+),
+Residences AS (
+	SELECT ID_psg, town_from AS town
+	FROM Trips
+	WHERE rnAsc = 1
+),
+CurrentPlace AS (
+	SELECT ID_psg, town_to AS currPlace
+	FROM Trips
+	WHERE rnDesc = 1
+)
+
+SELECT (SELECT name FROM Passenger p WHERE p.ID_psg = r.ID_psg) AS name, r.town
+FROM Residences r, CurrentPlace cp
+WHERE r.ID_psg = cp.ID_psg
+  AND r.town != cp.currPlace
+
+===============================================================================================================================================
+
+Exercise: 123 (qwrqwr: 2014-11-07)
+For each maker find out the number of available products (of any type) with a non-unique price and the number of such non-unique prices.
+Result set: maker, number of products, number of prices.
+(Для каждого производителя подсчитать: сколько имеется в наличии его продуктов (любого типа) с неуникальной для этого
+производителя ценой и количество таких неуникальных цен.
+Вывод: производитель, количество продуктов, количество цен.)
+
+WITH AllProducts AS (
+	SELECT p.maker, p.model, code, price
+	FROM PC pc, Product p
+	WHERE pc.model = p.model
+UNION ALL
+	SELECT p.maker, p.model, code, price
+	FROM Laptop l, Product p
+	WHERE l.model = p.model
+UNION ALL
+	SELECT p.maker, p.model, code, price
+	FROM Printer pr, Product p
+	WHERE pr.model = p.model
+),
+nonUniqPrices AS (
+	SELECT p.maker, a.price
+	FROM AllProducts a, Product p
+	WHERE p.model = a.model
+	GROUP BY p.maker, a.price
+	HAVING COUNT(a.price) > 1
+)
+
+SELECT p.maker, COUNT(code) AS cou, COUNT(DISTINCT n.price) AS cou2
+FROM (SELECT DISTINCT maker FROM Product) p
+LEFT JOIN nonUniqPrices n ON p.maker = n.maker
+LEFT JOIN AllProducts a ON a.maker = p.maker
+			AND a.price = n.price
+GROUP BY p.maker
+
+===============================================================================================================================================
+
+Exercise: 124 (DimaN: 2004-03-01)
+Among the passengers who flew with at least two airlines find those who traveled the same number of times with each of these airlines.
+Display the names of such passengers.
+(Среди пассажиров, которые пользовались услугами не менее двух авиакомпаний, найти тех,
+кто совершил одинаковое количество полётов самолетами каждой из этих авиакомпаний.
+Вывести имена таких пассажиров.)
+
+WITH passInfo AS (
+	SELECT pt.ID_psg AS psg, t.id_comp AS comp, COUNT(*) AS count
+	FROM Trip t, Pass_in_trip pt
+	WHERE t.trip_no = pt.trip_no
+	GROUP BY pt.ID_psg, t.id_comp
+)
+
+SELECT (SELECT p.name FROM Passenger p
+	WHERE pi.psg = p.ID_psg) AS name
+FROM passInfo pi 
+GROUP BY psg
+HAVING COUNT(comp) > 1
+   AND MIN(count) = MAX(count)
+
+===============================================================================================================================================
+
+Exercise: 125 (Baser: 2014-10-24)
+Put all data about models on sale and their prices (from the tables Laptop, PC and Printer) into a single table named LPP, and enumerate its records (by assigning an id to each row)
+without gaps or duplicates.
+Assume the models in each of the original three tables to be sorted in ascending order by the code field. The unified LPP table numbering has to be set up according to the following rule:
+first go the first models from the tables (Laptop, PC, and Printer), then the last models, after that - the second models in the original tables, then, the penultimate ones, etc.
+In case there are no models of a particular type left, number the remaining models of other types only.
+Output the LPP table in 4 columns: id, type, model, and price. The type field contains one of the strings 'Laptop', 'PC', or 'Printer'.
+(Данные о продаваемых моделях и ценах (из таблиц Laptop, PC и Printer) объединить в одну таблицу LPP и создать в ней порядковую нумерацию (id) без пропусков и дубликатов.
+Считать, что модели внутри каждой из трёх таблиц упорядочены по возрастанию поля code. Единую нумерацию записей LPP сделать по следующему правилу:
+сначала идут первые модели из таблиц (Laptop, PC и Printer), потом последние модели, далее - вторые модели из таблиц, предпоследние и т.д.
+При исчерпании моделей определенного типа, нумеровать только оставшиеся модели других типов.
+Вывести: id, type, model и price. Тип модели type является строкой 'Laptop', 'PC' или 'Printer'.)
+
+
+
+===============================================================================================================================================
+
+Exercise: 126 (Serge I: 2015-04-17)
+For the sequence of passengers ordered by id_psg find out the ones having the maximum number of flight bookings,
+as well as the ones directly preceding and following them in the sequence.
+The first passenger in the sequence is preceded by the last one, and the last passenger is followed by the first one.
+For each passenger meeting the aforementioned criterion, display his/her name, the name of the previous passenger,
+and the name of the next passenger.
+(Для последовательности пассажиров, упорядоченных по id_psg, определить того,
+кто совершил наибольшее число полетов, а также тех, кто находится в последовательности непосредственно перед и после него.
+Для первого пассажира в последовательности предыдущим будет последний, а для последнего пассажира последующим будет первый.
+Для каждого пассажира, отвечающего условию, вывести: имя, имя предыдущего пассажира, имя следующего пассажира.)
+
+WITH psgInfo AS (
+	SELECT  ID_psg, COUNT(trip_no) AS flights,
+		MAX(COUNT(trip_no)) OVER() AS max
+	FROM Pass_in_trip
+	GROUP BY ID_psg
+),
+neededOrder AS (
+	SELECT  ID_psg, name,
+		ISNULL( LAG(name) OVER(ORDER BY ID_psg),
+			(SELECT TOP 1 name FROM Passenger
+			 ORDER BY ID_psg DESC
+			)
+		) AS prev,
+		ISNULL( LEAD(name) OVER(ORDER BY ID_psg),
+			(SELECT TOP 1 name FROM Passenger
+			 ORDER BY ID_psg
+			)
+		) AS next
+	FROM Passenger
+)
+
+SELECT name, prev, next
+FROM neededOrder
+WHERE ID_psg IN (SELECT ID_psg FROM psgInfo
+	  	 WHERE flights = max
+		 )
+
+===============================================================================================================================================
+
+Exercise: 127 (qwrqwr: 2015-04-24)
+Find out the arithmetic mean (rounded to hundredths) of the following prices:
+1. Price of the cheapest Laptops produced by makers of PCs with the lowest CD-ROM speed;
+2. Price of the most expensive PCs by makers of the cheapest printers;
+3. Price of the most expensive printers by makers of Laptops with the greatest RAM capacity.
+Note: Exclude missing prices from the calculation.
+(Найти округленное до сотых долей среднее арифметическое следующих цен:
+1. Цена самых дешевых Laptop-ов от производителей РС с самой низкой скоростью CD;
+2. Цена самых дорогих РС от производителей самых дешевых принтеров;
+3. Цена самых дорогих принтеров от производителей Laptop-ов с наибольшим объемом памяти.
+Замечание: При расчёте среднего отсутствующие цены не учитывать.)
+
+WITH minCD AS (
+	SELECT TOP 1 cd
+	FROM PC
+	ORDER BY CAST(LEFT(cd, LEN(cd) - 1) AS INT)
+),
+pcMakers AS (
+	SELECT maker
+	FROM Product p, PC pc
+	WHERE p.type = 'PC'
+	  AND pc.cd = (SELECT cd FROM minCD)
+	  AND p.model = pc.model
+),
+printMakers AS (
+	SELECT maker
+	FROM Product p, Printer pr
+	WHERE p.type = 'Printer'
+	  AND pr.price = (SELECT MIN(price) FROM Printer)
+	  AND p.model = pr.model
+),
+laptopMakers AS (
+	SELECT maker
+	FROM Product p, Laptop l
+	WHERE p.type = 'Laptop'
+	  AND l.ram = (SELECT MAX(ram) FROM Laptop)
+	  AND p.model = l.model
+)
+
+SELECT CAST(AVG(price) AS DECIMAL(8,2))AS avg_val
+FROM (
+	SELECT MIN(l.price) AS price
+	FROM Product p, Laptop l
+	WHERE p.maker IN (SELECT maker FROM pcMakers)
+	  AND p.model = l.model
+UNION ALL
+	SELECT MAX(pc.price)
+	FROM Product p, PC pc
+	WHERE p.maker IN (SELECT maker FROM printMakers)
+	  AND p.model = pc.model
+UNION ALL
+	SELECT MAX(pr.price)
+	FROM Product p, Printer pr
+	WHERE p.maker IN (SELECT maker FROM laptopMakers)
+	  AND p.model = pr.model
+) neededPrices
+
+===============================================================================================================================================
+
+Exercise: 128 (Shurgenz: 2006-08-05)
+For each existing pair of buy-back centers from different tables (outcome and outcome_o) having the same identifier,
+determine the one with a greater total daily payout for each date at least one member of the pair collected recyclables.
+Result set: buy-back center ID, date, one of the following messages:
+- "once a day", if the center with only one payment per day possible has a greater payout;
+- "more than once a day", if the payout is greater for the center with several transactions per day possible;
+- "both", if both pair members paid out the same sum.
+(Определить лидера по сумме выплат в соревновании между каждой существующей парой пунктов с одинаковыми
+номерами из двух разных таблиц - outcome и outcome_o - на каждый день, когда осуществлялся прием вторсырья хотя бы на одном из них.
+Вывод: Номер пункта, дата, текст:
+- "once a day", если сумма выплат больше у фирмы с отчетностью один раз в день;
+- "more than once a day", если - у фирмы с отчетностью несколько раз в день;
+- "both", если сумма выплат одинакова.)
+
+WITH severalOutADay AS (
+	SELECT point, date, SUM(out) AS total
+	FROM Outcome
+	WHERE point IN (SELECT point FROM Outcome_o)
+	GROUP BY point, date
+),
+onceADay AS (
+	SELECT *
+	FROM Outcome_o
+	WHERE point IN (SELECT point FROM Outcome)
+)
+
+SELECT   COALESCE(o.point, s.point) AS point,
+	COALESCE(o.date, s.date) AS date,
+	CASE
+		WHEN o.out IS NULL OR o.out < s.total THEN 'more than once a day'
+		WHEN s.total IS NULL OR o.out > s.total THEN 'once a day'
+		ELSE 'both'
+	END AS lider
+FROM onceADay AS o
+FULL JOIN severalOutADay AS s
+ON o.date = s.date AND o.point = s.point
+
+===============================================================================================================================================
+
+Exercise: 129 (Serge I: 2008-02-01)
+Assuming there are gaps in the sequence of ordered square IDs (Q_ID), find the minimum and maximum "free" values in the range
+between the least and the biggest existing IDs.
+E.g., for a square ID sequence consisting of 1, 2, 5, 7, the result should be 3 and 6.
+If there are no gaps in the sequence, display NULLs for both values.
+(Предполагая, что среди идентификаторов квадратов имеются пропуски, найти минимальный и максимальный "свободный"
+идентификатор в диапазоне между имеющимися максимальным и минимальным идентификаторами.
+Например, для последовательности идентификаторов квадратов 1,2,5,7 результат должен быть 3 и 6.
+Если пропусков нет, вместо каждого искомого значения выводить NULL.)
+
+
+
+===============================================================================================================================================
+
+Exercise: 130 (Velmont: 2015-08-14)
+Historians decided to make a summary of battles and arrange it in two super columns. Each super column consists of three columns containing the battle serial number, name, and date.
+First, the left super column is filled out in ascending order of serial numbers, then the right one. Serial numbers are assigned sequentially, with the battles being sorted by date, then by name.
+In order to save paper the historians distribute the data from the Battles table equally between the two super columns (adding an extra battle to the left one if the total of battles is odd).
+Display the result of the historians’ work as a six-column table, filling empty cells with NULL values.
+(Историки решили составить отчет о битвах в два суперстолбца. Каждый суперстолбец состоит из трёх столбцов (номер битвы, название и дата).
+Сначала в порядке возрастания номеров заполняется первый суперстолбец, потом - второй. Порядковый номер битве назначается согласно сортировке: дата, название.
+С целью экономии бумаги, историки делят информацию из таблицы Battles поровну, занося в первый суперстолбец на одну битву больше при их нечетном количестве.
+В таблицу с шестью колонками вывести результат работы историков, пустые места заполнить NULL-значениями.)
+
+
+
+===============================================================================================================================================
